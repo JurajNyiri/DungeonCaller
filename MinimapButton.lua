@@ -4,7 +4,7 @@ addon.MinimapButton = addon.MinimapButton or {}
 local MinimapButton = addon.MinimapButton
 local Helpers = addon.Helpers
 
-local ADDON_LDB_NAME = "JannetaDungeonCaller"
+local ADDON_LDB_NAME = "DungeonCaller"
 local ICON_TEXTURE = "Interface\\ICONS\\INV_Misc_Horn_03"
 local isInitialized = false
 
@@ -24,7 +24,7 @@ function MinimapButton.Initialize()
 
     local dataObject = ldb:NewDataObject(ADDON_LDB_NAME, {
         type = "launcher",
-        text = "Janneta Dungeon Caller",
+        text = "Dungeon Caller",
         icon = ICON_TEXTURE,
         OnClick = function(_, button)
             if button == "RightButton" then
@@ -37,7 +37,7 @@ function MinimapButton.Initialize()
             draggableWindow.Toggle()
         end,
         OnTooltipShow = function(tooltip)
-            tooltip:AddLine("Janneta Dungeon Caller")
+            tooltip:AddLine("Dungeon Caller")
             tooltip:AddLine("Left-click: toggle window")
             tooltip:AddLine("Right-click: open settings")
             tooltip:AddLine("Drag: move button")

@@ -266,7 +266,7 @@ local function PostMessage(text)
     local target = Trim(db.whisperTarget)
 
     if not CanSendInChannel(channel, target) then
-        print("Janneta Dungeon Caller: Selected channel is not available, sending to Say.")
+        print("Dungeon Caller: Selected channel is not available, sending to Say.")
         channel = "SAY"
     end
 

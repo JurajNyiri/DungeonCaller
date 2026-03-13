@@ -26,7 +26,7 @@ local DROPDOWN_MARGIN_LEFT_ADJUSTMENT = -13
 
 
 local function CreateScrollableContent(panel)
-    local scrollFrame = CreateFrame("ScrollFrame", "JannetaDungeonCallerOptionsScrollFrame", panel, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", "DungeonCallerOptionsScrollFrame", panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 8)
 
@@ -73,17 +73,17 @@ local function SetBlClassValue(classToken, enabled)
     end
     currentDb.blClasses[classToken] = enabled
 
-    if type(JannetaDungeonCallerDB) == "table" then
-        if type(JannetaDungeonCallerDB.blClasses) ~= "table" then
-            JannetaDungeonCallerDB.blClasses = {}
+    if type(DungeonCallerDB) == "table" then
+        if type(DungeonCallerDB.blClasses) ~= "table" then
+            DungeonCallerDB.blClasses = {}
         end
-        JannetaDungeonCallerDB.blClasses[classToken] = enabled
+        DungeonCallerDB.blClasses[classToken] = enabled
     end
 end
 
 local function CreateOptionsPanel()
-    local panel = CreateFrame("Frame", "JannetaDungeonCallerOptionsPanel", UIParent)
-    panel.name = "Janneta Dungeon Caller"
+    local panel = CreateFrame("Frame", "DungeonCallerOptionsPanel", UIParent)
+    panel.name = "Dungeon Caller"
     panel:SetWidth(520)
     panel:SetHeight(420)
     return panel
@@ -96,7 +96,7 @@ local function CreateTitlePanel(panel)
 
     local title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
-    title:SetText("Janneta Dungeon Caller")
+    title:SetText("Dungeon Caller")
 
     local subtitle = section:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
@@ -116,7 +116,7 @@ local function CreatePostChannelSection(panel, anchorSection)
     channelLabel:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
     channelLabel:SetText("Post channel")
 
-    local channelDropdown = CreateFrame("Frame", "JannetaDungeonCaller_ChannelDropdown", section, "UIDropDownMenuTemplate")
+    local channelDropdown = CreateFrame("Frame", "DungeonCaller_ChannelDropdown", section, "UIDropDownMenuTemplate")
     channelDropdown:SetPoint("TOPLEFT", channelLabel, "BOTTOMLEFT", MAIN_MARGIN_TOP, SECTION_MARGIN_TOP)
     UIDropDownMenu_SetWidth(channelDropdown, SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
     UIDropDownMenu_SetButtonWidth(channelDropdown, SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
@@ -235,28 +235,28 @@ local function CreateRoleWordsSection(panel, anchorSection)
     roleWordsHeader:SetText("Role words")
 
     local tankSingularSection = CreateTextSection(
-        section, section, "Tank singular", "roleTankSingular", "JannetaDungeonCaller_RoleTankSingular"
+        section, section, "Tank singular", "roleTankSingular", "DungeonCaller_RoleTankSingular"
     )
     local tankPluralSection = CreateTextSection(
-        section, tankSingularSection, "Tank plural", "roleTankPlural", "JannetaDungeonCaller_RoleTankPlural"
+        section, tankSingularSection, "Tank plural", "roleTankPlural", "DungeonCaller_RoleTankPlural"
     )
     local healerSingularSection = CreateTextSection(
-        section, tankPluralSection, "Healer singular", "roleHealerSingular", "JannetaDungeonCaller_RoleHealerSingular"
+        section, tankPluralSection, "Healer singular", "roleHealerSingular", "DungeonCaller_RoleHealerSingular"
     )
     local healerPluralSection = CreateTextSection(
-        section, healerSingularSection, "Healer plural", "roleHealerPlural", "JannetaDungeonCaller_RoleHealerPlural"
+        section, healerSingularSection, "Healer plural", "roleHealerPlural", "DungeonCaller_RoleHealerPlural"
     )
     local dpsSingularSection = CreateTextSection(
-        section, healerPluralSection, "DPS singular", "roleDpsSingular", "JannetaDungeonCaller_RoleDpsSingular"
+        section, healerPluralSection, "DPS singular", "roleDpsSingular", "DungeonCaller_RoleDpsSingular"
     )
     local dpsPluralSection = CreateTextSection(
-        section, dpsSingularSection, "DPS plural", "roleDpsPlural", "JannetaDungeonCaller_RoleDpsPlural"
+        section, dpsSingularSection, "DPS plural", "roleDpsPlural", "DungeonCaller_RoleDpsPlural"
     )
     local readyMessageSection = CreateTextSection(
-        section, dpsPluralSection, "Ready message", "readyMessage", "JannetaDungeonCaller_ReadyMessage"
+        section, dpsPluralSection, "Ready message", "readyMessage", "DungeonCaller_ReadyMessage"
     )
     local needBlSuffixSection = CreateTextSection(
-        section, readyMessageSection, "Need BL suffix", "needBlSuffix", "JannetaDungeonCaller_NeedBlSuffix"
+        section, readyMessageSection, "Need BL suffix", "needBlSuffix", "DungeonCaller_NeedBlSuffix"
     )
 
     return section
@@ -271,7 +271,7 @@ local function CreateBlRequirementSection(panel, anchorSection)
     blHeader:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
     blHeader:SetText("BL Classes rules")
 
-    local blToggle = CreateFrame("CheckButton", "JannetaDungeonCaller_BLRequired", section, "UICheckButtonTemplate")
+    local blToggle = CreateFrame("CheckButton", "DungeonCaller_BLRequired", section, "UICheckButtonTemplate")
     blToggle:SetPoint("TOPLEFT", blHeader, "BOTTOMLEFT", -5, SECTION_MARGIN_TOP)
     blToggle:SetChecked(Helpers.GetGlobalDb().requireBl)
     blToggle:SetScript("OnClick", function(self)
@@ -319,7 +319,7 @@ local function CreateTemplateSection(panel, anchorSection)
     section:SetSize(FULL_SECTION_WIDTH, 150)
 
     local needMessageTemplateSection = CreateTextSection(
-        section, section, "Message template", "needMessageTemplate", "JannetaDungeonCaller_NeedMessageTemplate", FULL_SECTION_WIDTH
+        section, section, "Message template", "needMessageTemplate", "DungeonCaller_NeedMessageTemplate", FULL_SECTION_WIDTH
     )
     local needTemplateGuideSection = CreateNeedTemplateGuideSection(section, needMessageTemplateSection, FULL_SECTION_WIDTH)
 
@@ -334,7 +334,7 @@ local function SetupOptionsPanel()
 
     local postChannelSection = CreatePostChannelSection(scrollContent, titleSection)
     local whisperTargetSection = CreateTextSection(
-        scrollContent, postChannelSection, "Whisper target", "whisperTarget", "JannetaDungeonCaller_WhisperTarget"
+        scrollContent, postChannelSection, "Whisper target", "whisperTarget", "DungeonCaller_WhisperTarget"
     )
 
     local blRequirementSection = CreateBlRequirementSection(scrollContent, whisperTargetSection)

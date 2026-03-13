@@ -5,11 +5,11 @@ local Helpers = addon.Helpers
 local Constants = addon.Constants
 
 function Helpers.EnsureDefaults()
-    if type(JannetaDungeonCallerDB) ~= "table" then
-        JannetaDungeonCallerDB = {}
+    if type(DungeonCallerDB) ~= "table" then
+        DungeonCallerDB = {}
     end
 
-    local db = JannetaDungeonCallerDB
+    local db = DungeonCallerDB
     local defaults = Constants.NewDefaultDb()
     for key, value in pairs(defaults) do
         if db[key] == nil then
@@ -30,17 +30,17 @@ function Helpers.EnsureDefaults()
 end
 
 function Helpers.GetGlobalDb()
-    if type(JannetaDungeonCallerDB) ~= "table" then
-        JannetaDungeonCallerDB = Helpers.EnsureDefaults()
+    if type(DungeonCallerDB) ~= "table" then
+        DungeonCallerDB = Helpers.EnsureDefaults()
     end
-    return JannetaDungeonCallerDB
+    return DungeonCallerDB
 end
 
 function Helpers.SetDbValue(key, value)
     local currentDb = Helpers.GetGlobalDb()
     currentDb[key] = value
-    if type(JannetaDungeonCallerDB) == "table" then
-        JannetaDungeonCallerDB[key] = value
+    if type(DungeonCallerDB) == "table" then
+        DungeonCallerDB[key] = value
     end
 end
 

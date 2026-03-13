@@ -6,7 +6,7 @@ local Helpers = addon.Helpers
 local DungeonLists = addon.DungeonLists
 local SetDbValue = Helpers.SetDbValue
 
-local FRAME_NAME = "JannetaDungeonCallerDraggableWindow"
+local FRAME_NAME = "DungeonCallerDraggableWindow"
 local WINDOW_WIDTH = 360
 local WINDOW_HEIGHT = 200
 local CONTENT_PADDING = 6
@@ -216,7 +216,7 @@ local function CreateMythicPlusKeyWidgets(window, parentGroup)
     keyLevelLabel:SetPoint("LEFT", parentGroup.dropdown, "RIGHT", 0, 2)
     keyLevelLabel:SetText("Key")
 
-    local keyLevelInput = CreateFrame("EditBox", "JannetaDungeonCaller_MythicPlusKeyLevelInput", parentGroup, "InputBoxTemplate")
+    local keyLevelInput = CreateFrame("EditBox", "DungeonCaller_MythicPlusKeyLevelInput", parentGroup, "InputBoxTemplate")
     keyLevelInput:SetPoint("LEFT", keyLevelLabel, "RIGHT", -KEY_RIGHT_PADDING, 0)
     keyLevelInput:SetSize(KEY_LEVEL_EDITBOX_WIDTH, KEY_LEVEL_EDITBOX_HEIGHT)
     keyLevelInput:SetAutoFocus(false)
@@ -284,7 +284,7 @@ local function UpdateDifficultyDependentWidgets(window, selectedDifficulty)
 end
 
 local function CreateRunDcButton(window, parent, anchor)
-    local button = CreateFrame("Button", "JannetaDungeonCaller_RunDcButton", parent, "UIPanelButtonTemplate")
+    local button = CreateFrame("Button", "DungeonCaller_RunDcButton", parent, "UIPanelButtonTemplate")
     button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", HEADING_LEFT, GROUP_SPACING)
     button:SetSize(BUTTON_WIDTH, 24)
     button:SetText("Send")
@@ -295,7 +295,7 @@ local function CreateRunDcButton(window, parent, anchor)
             return
         end
 
-        print("Janneta Dungeon Caller: /dc handler is not available.")
+        print("Dungeon Caller: /dc handler is not available.")
     end)
 
     window.runDcButton = button
@@ -311,7 +311,7 @@ local function CreateContentControls(window)
     local difficultyGroup = CreateDropdownGroup(
         section,
         "Difficulty option",
-        "JannetaDungeonCaller_DifficultyDropdown",
+        "DungeonCaller_DifficultyDropdown",
         "selectedDifficulty",
         GetDifficultyOptions,
         rootAnchor,
@@ -324,7 +324,7 @@ local function CreateContentControls(window)
     local dungeonGroup = CreateDropdownGroup(
         section,
         "Dungeons option",
-        "JannetaDungeonCaller_DungeonDropdown",
+        "DungeonCaller_DungeonDropdown",
         "selectedDungeon",
         DungeonLists and DungeonLists.CollectCurrentExpansionDungeonNames,
         difficultyGroup,
@@ -333,7 +333,7 @@ local function CreateContentControls(window)
     local mplusGroup = CreateDropdownGroup(
         section,
         "M+ dungeons option",
-        "JannetaDungeonCaller_MPlusDungeonDropdown",
+        "DungeonCaller_MPlusDungeonDropdown",
         "selectedMythicPlusDungeon",
         DungeonLists and DungeonLists.CollectMythicPlusDungeonNames,
         difficultyGroup,
@@ -367,7 +367,7 @@ local function CreateWindow()
     window:Hide()
 
     if window.TitleText then
-        window.TitleText:SetText("Janneta Dungeon Caller")
+        window.TitleText:SetText("Dungeon Caller")
     end
 
     window.ContentSection = CreateContentSection(window)
