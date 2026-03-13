@@ -8,6 +8,7 @@ local Helpers = addon.Helpers
 local CHANNEL_OPTIONS = Constants.CHANNEL_OPTIONS
 local CLASS_TOKENS = Constants.CLASS_TOKENS
 local Trim = Helpers.Trim
+local SetDbValue = Helpers.SetDbValue
 
 local optionsPanel
 local optionsCategory
@@ -62,14 +63,6 @@ local function UpdateScrollContentHeight(scrollContent, scrollFrame)
     local visibleHeight = scrollFrame:GetHeight() or 0
     local targetHeight = math.max(neededHeight, visibleHeight, 1)
     scrollContent:SetHeight(targetHeight)
-end
-
-local function SetDbValue(key, value)
-    local currentDb = Helpers.GetGlobalDb()
-    currentDb[key] = value
-    if type(JannetaDungeonCallerDB) == "table" then
-        JannetaDungeonCallerDB[key] = value
-    end
 end
 
 local function SetBlClassValue(classToken, enabled)

@@ -36,6 +36,14 @@ function Helpers.GetGlobalDb()
     return JannetaDungeonCallerDB
 end
 
+function Helpers.SetDbValue(key, value)
+    local currentDb = Helpers.GetGlobalDb()
+    currentDb[key] = value
+    if type(JannetaDungeonCallerDB) == "table" then
+        JannetaDungeonCallerDB[key] = value
+    end
+end
+
 function Helpers.Trim(value)
     value = value or ""
     return (value:gsub("^%s+", ""):gsub("%s+$", ""))

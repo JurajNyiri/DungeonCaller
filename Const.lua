@@ -53,6 +53,10 @@ function Constants.NewDefaultDb()
         roleHealerPlural = "healers",
         roleDpsSingular = "DPS",
         roleDpsPlural = "DPS",
+        selectedDungeon = "",
+        selectedMythicPlusDungeon = "",
+        selectedDifficulty = "Normal",
+        mythicPlusKeyLevel = 2,
         blClasses = {},
     }
 
