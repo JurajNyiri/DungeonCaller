@@ -326,10 +326,19 @@ local function PrintDungeonLists()
     print("JDC Mythic+ rotation (" .. tostring(#mplus) .. "): " .. (#mplus > 0 and table.concat(mplus, ", ") or "none found"))
 end
 
+local function PrintLockedDungeonList()
+    local lockedDungeons = DungeonLists.CollectLockedDungeonNames()
+    print("JDC Locked dungeons (" .. tostring(#lockedDungeons) .. "): " .. (#lockedDungeons > 0 and table.concat(lockedDungeons, ", ") or "none found"))
+end
+
 local function OnSlashCommand(msg)
     local command = string.lower(Trim(msg or ""))
     if command == "dungeons" then
         PrintDungeonLists()
+        return
+    end
+    if command == "lockout" then
+        PrintLockedDungeonList()
         return
     end
 

@@ -73,6 +73,27 @@ local function CollectMythicPlusDungeonNames()
     return maps
 end
 
+local function CollectLockedDungeonNames()
+    local lockedDungeons = {}
+    local seen = {}
+
+    local total = GetNumSavedInstances()
+    for index = 1, total do
+        local name, _, _, _, locked, extended, _, isRaid, maxPlayers = GetSavedInstanceInfo(index)
+        local hasLockout = locked or extended
+        local isDungeon = not isRaid and (maxPlayers == nil or maxPlayers == 5)
+
+        if hasLockout and isDungeon and type(name) == "string" and name ~= "" and not seen[name] then
+            seen[name] = true
+            table.insert(lockedDungeons, name)
+        end
+    end
+
+    table.sort(lockedDungeons)
+    return lockedDungeons
+end
+
 DungeonLists.CollectCurrentExpansionDungeonNames = CollectCurrentExpansionDungeonNames
 DungeonLists.CollectRaidNames = CollectRaidNames
 DungeonLists.CollectMythicPlusDungeonNames = CollectMythicPlusDungeonNames
+DungeonLists.CollectLockedDungeonNames = CollectLockedDungeonNames
