@@ -10,6 +10,7 @@ local CLASS_TOKENS = Constants.CLASS_TOKENS
 local Trim = Helpers.Trim
 
 local optionsPanel
+local optionsCategory
 local optionsInitError
 local db
 
@@ -334,8 +335,8 @@ local function SetupOptionsPanel()
         UpdateScrollContentHeight(scrollContent, scrollFrame)
     end)
 
-    local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-    Settings.RegisterAddOnCategory(category)
+    optionsCategory = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    Settings.RegisterAddOnCategory(optionsCategory)
 
     return panel
 end
@@ -361,6 +362,11 @@ function UI.Initialize(currentDb)
 
     optionsPanel = panelResult
     optionsInitError = nil
+    return true
+end
+
+function UI.OpenOptionsPanel()
+    Settings.OpenToCategory(optionsCategory:GetID())
     return true
 end
 

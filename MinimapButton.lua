@@ -26,12 +26,19 @@ function MinimapButton.Initialize()
         type = "launcher",
         text = "Janneta Dungeon Caller",
         icon = ICON_TEXTURE,
-        OnClick = function()
+        OnClick = function(_, button)
+            if button == "RightButton" then
+                local ui = addon.UI
+                ui.OpenOptionsPanel()
+                return
+            end
+
             print("Janneta Dungeon Caller: Minimap button clicked.")
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Janneta Dungeon Caller")
             tooltip:AddLine("Left-click: test action")
+            tooltip:AddLine("Right-click: open settings")
             tooltip:AddLine("Drag: move button")
         end,
     })
