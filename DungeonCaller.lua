@@ -328,7 +328,17 @@ end
 
 local function PrintLockedDungeonList()
     local lockedDungeons = DungeonLists.CollectLockedDungeonNames()
-    print("JDC Locked dungeons (" .. tostring(#lockedDungeons) .. "): " .. (#lockedDungeons > 0 and table.concat(lockedDungeons, ", ") or "none found"))
+    local formatted = {}
+    for _, entry in ipairs(lockedDungeons) do
+        if type(entry) == "table" and type(entry.name) == "string" and entry.name ~= "" then
+            local difficultyText = tostring(entry.difficultyName or entry.difficultyID or "Unknown")
+            table.insert(formatted, entry.name .. " (" .. difficultyText .. ")")
+        elseif type(entry) == "string" and entry ~= "" then
+            table.insert(formatted, entry)
+        end
+    end
+
+    print("JDC Locked dungeons (" .. tostring(#formatted) .. "): " .. (#formatted > 0 and table.concat(formatted, ", ") or "none found"))
 end
 
 local function OnSlashCommand(msg)
