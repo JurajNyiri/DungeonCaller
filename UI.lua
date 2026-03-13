@@ -63,19 +63,8 @@ local function UpdateScrollContentHeight(scrollContent, scrollFrame)
     scrollContent:SetHeight(targetHeight)
 end
 
-local function CurrentDb()
-    if type(db) ~= "table" then
-        if type(Constants.NewDefaultDb) == "function" then
-            db = Constants.NewDefaultDb()
-        else
-            db = {}
-        end
-    end
-    return db
-end
-
 local function SetDbValue(key, value)
-    local currentDb = CurrentDb()
+    local currentDb = Helpers.GetGlobalDb()
     currentDb[key] = value
     if type(JannetaDungeonCallerDB) == "table" then
         JannetaDungeonCallerDB[key] = value
@@ -83,7 +72,7 @@ local function SetDbValue(key, value)
 end
 
 local function SetBlClassValue(classToken, enabled)
-    local currentDb = CurrentDb()
+    local currentDb = Helpers.GetGlobalDb()
     if type(currentDb.blClasses) ~= "table" then
         currentDb.blClasses = {}
     end
@@ -151,7 +140,7 @@ local function CreatePostChannelSection(panel, anchorSection)
     end
 
     local function RefreshChannelDropdown()
-        local value = CurrentDb().postChannel
+        local value = Helpers.GetGlobalDb().postChannel
         UIDropDownMenu_SetSelectedValue(channelDropdown, value)
         UIDropDownMenu_SetText(channelDropdown, GetChannelLabel(value))
     end
@@ -167,7 +156,7 @@ local function CreatePostChannelSection(panel, anchorSection)
             local info = UIDropDownMenu_CreateInfo()
             info.text = channelText
             info.value = channelValue
-            info.checked = CurrentDb().postChannel == channelValue
+            info.checked = Helpers.GetGlobalDb().postChannel == channelValue
             info.minWidth = SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT
             info.func = function()
                 SetDbValue("postChannel", channelValue)
@@ -183,7 +172,7 @@ local function CreatePostChannelSection(panel, anchorSection)
 end
 
 local function CreateTextSection(panel, anchorSection, title, valueKey, id)
-    local textValue = CurrentDb()[valueKey]
+    local textValue = Helpers.GetGlobalDb()[valueKey]
     local section = CreateFrame("Frame", nil, panel)
     section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
     section:SetSize(SECTION_WIDTH, 50)
@@ -275,7 +264,7 @@ local function CreateBlRequirementSection(panel, anchorSection)
 
     local blToggle = CreateFrame("CheckButton", "JannetaDungeonCaller_BLRequired", section, "UICheckButtonTemplate")
     blToggle:SetPoint("TOPLEFT", blHeader, "BOTTOMLEFT", -5, SECTION_MARGIN_TOP)
-    blToggle:SetChecked(CurrentDb().requireBl)
+    blToggle:SetChecked(Helpers.GetGlobalDb().requireBl)
     blToggle:SetScript("OnClick", function(self)
         SetDbValue("requireBl", self:GetChecked())
     end)
@@ -303,7 +292,7 @@ local function CreateBlClassesSection(panel, anchorSection)
 
         local cb = CreateFrame("CheckButton", nil, section, "UICheckButtonTemplate")
         cb:SetPoint("TOPLEFT", blClassesHeader, "BOTTOMLEFT", -5 + col * 130, SECTION_MARGIN_TOP - (row * 24))
-        cb:SetChecked(CurrentDb().blClasses and CurrentDb().blClasses[token])
+        cb:SetChecked(Helpers.GetGlobalDb().blClasses and Helpers.GetGlobalDb().blClasses[token])
         cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         cb.text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
         cb.text:SetText(LOCALIZED_CLASS_NAMES_MALE[token] or token)
@@ -378,3 +367,4 @@ end
 function UI.GetInitError()
     return optionsInitError
 end
+

@@ -4,6 +4,7 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local UI = addon.UI
 local DungeonLists = addon.DungeonLists
+local MinimapButton = addon.MinimapButton
 
 local REQUIRED_TANKS = Constants.REQUIRED_TANKS
 local REQUIRED_HEALERS = Constants.REQUIRED_HEALERS
@@ -275,5 +276,6 @@ bootstrap:SetScript("OnEvent", function(_, event, loadedAddon)
 
         UI.SetDb(db)
         UI.Initialize(db)
+        MinimapButton.Initialize()
     end
 end)

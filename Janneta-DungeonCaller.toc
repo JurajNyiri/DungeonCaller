@@ -4,9 +4,11 @@
 ## Author: Janneta
 ## Version: 1.0
 ## SavedVariables: JannetaDungeonCallerDB
+## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
 
 Const.lua
 HelperFunctions.lua
 DungeonLists.lua
+MinimapButton.lua
 UI.lua
 Janneta-DungeonCaller.lua

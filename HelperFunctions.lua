@@ -29,6 +29,13 @@ function Helpers.EnsureDefaults()
     return db
 end
 
+function Helpers.GetGlobalDb()
+    if type(JannetaDungeonCallerDB) ~= "table" then
+        JannetaDungeonCallerDB = Helpers.EnsureDefaults()
+    end
+    return JannetaDungeonCallerDB
+end
+
 function Helpers.Trim(value)
     value = value or ""
     return (value:gsub("^%s+", ""):gsub("%s+$", ""))
