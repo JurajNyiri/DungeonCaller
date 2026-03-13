@@ -17,7 +17,7 @@ function MinimapButton.Initialize()
     local ldbIcon = LibStub("LibDBIcon-1.0", true)
 
     local db = Helpers.GetGlobalDb()
-    db.minimap = {}
+    db.minimap = db.minimap or {}
     if db.minimap.hide == nil then
         db.minimap.hide = false
     end
@@ -33,11 +33,12 @@ function MinimapButton.Initialize()
                 return
             end
 
-            print("Janneta Dungeon Caller: Minimap button clicked.")
+            local draggableWindow = addon.DraggableWindow
+            draggableWindow.Toggle()
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Janneta Dungeon Caller")
-            tooltip:AddLine("Left-click: test action")
+            tooltip:AddLine("Left-click: toggle window")
             tooltip:AddLine("Right-click: open settings")
             tooltip:AddLine("Drag: move button")
         end,

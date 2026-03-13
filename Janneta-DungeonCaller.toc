@@ -9,6 +9,7 @@
 Const.lua
 HelperFunctions.lua
 DungeonLists.lua
+DraggableWindow.lua
 MinimapButton.lua
 UI.lua
 Janneta-DungeonCaller.lua
