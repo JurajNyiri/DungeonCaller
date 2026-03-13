@@ -5,6 +5,7 @@ local DraggableWindow = addon.DraggableWindow
 local Helpers = addon.Helpers
 local DungeonLists = addon.DungeonLists
 local SetDbValue = Helpers.SetDbValue
+local Trim = Helpers.Trim
 
 local FRAME_NAME = "DungeonCallerDraggableWindow"
 local WINDOW_WIDTH = 360
@@ -34,6 +35,9 @@ local DIFFICULTY_OPTIONS = {
     "Mythic+",
 }
 
+local LOCKED_OPTION_COLOR_PREFIX = "|cff808080"
+local LOCKED_OPTION_COLOR_SUFFIX = "|r"
+
 local frame
 
 local function RegisterAsSpecialFrame(frameName)
@@ -56,6 +60,55 @@ local function GetDifficultyOptions()
         table.insert(options, option)
     end
     return options
+end
+
+local function BuildDungeonNameKey(value)
+    if type(value) ~= "string" then
+        return ""
+    end
+
+    return string.lower(Trim(value))
+end
+
+local function IsMatchingDifficulty(selectedDifficulty, lockedDifficultyName)
+    if type(selectedDifficulty) ~= "string" or selectedDifficulty == "" then
+        return false
+    end
+
+    if type(lockedDifficultyName) ~= "string" or lockedDifficultyName == "" then
+        return false
+    end
+
+    return selectedDifficulty == lockedDifficultyName
+end
+
+local function CollectLockedDungeonNameLookup()
+    local lookup = {}
+
+    local selectedDifficulty = Helpers.GetGlobalDb().selectedDifficulty
+    if selectedDifficulty == "Mythic+" then
+        return lookup
+    end
+
+    for _, entry in ipairs(DungeonLists.CollectLockedDungeonNames() or {}) do
+        if type(entry) == "table" then
+            local nameKey = BuildDungeonNameKey(entry.name)
+            if nameKey ~= "" and IsMatchingDifficulty(selectedDifficulty, entry.difficultyName) then
+                lookup[nameKey] = true
+            end
+        end
+    end
+
+    return lookup
+end
+
+local function GetOptionDisplayText(option, lockedLookup)
+    local optionName = tostring(option or "")
+    local optionKey = BuildDungeonNameKey(optionName)
+    if optionKey ~= "" and lockedLookup and lockedLookup[optionKey] then
+        return LOCKED_OPTION_COLOR_PREFIX .. optionName .. LOCKED_OPTION_COLOR_SUFFIX
+    end
+    return optionName
 end
 
 local function SanitizeMythicPlusKeyLevel(value)
@@ -111,8 +164,13 @@ local function RefreshDropdownGroup(group)
     SetDbValue(group.dbKey, selectedValue)
 
     if selectedValue ~= "" then
+        local selectedText = selectedValue
+        if group.useLockoutHighlight then
+            selectedText = GetOptionDisplayText(selectedValue, CollectLockedDungeonNameLookup())
+        end
+
         UIDropDownMenu_SetSelectedValue(group.dropdown, selectedValue)
-        UIDropDownMenu_SetText(group.dropdown, selectedValue)
+        UIDropDownMenu_SetText(group.dropdown, selectedText)
         if type(group.onSelected) == "function" then
             group.onSelected(selectedValue)
         end
@@ -126,7 +184,7 @@ local function RefreshDropdownGroup(group)
     end
 end
 
-local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, optionProvider, anchor, yOffset, width, onSelected)
+local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, optionProvider, anchor, yOffset, width, onSelected, useLockoutHighlight)
     local group = CreateFrame("Frame", nil, parent)
     group:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
     group:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
@@ -135,6 +193,7 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     group.optionProvider = optionProvider
     group.options = {}
     group.onSelected = onSelected
+    group.useLockoutHighlight = useLockoutHighlight == true
 
     local heading = group:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     heading:SetPoint("TOPLEFT", group, "TOPLEFT", HEADING_LEFT, 0)
@@ -169,17 +228,23 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
             return
         end
 
+        local lockedLookup
+        if group.useLockoutHighlight then
+            lockedLookup = CollectLockedDungeonNameLookup()
+        end
+
         local selectedValue = Helpers.GetGlobalDb()[group.dbKey]
         for _, option in ipairs(group.options) do
             local info = UIDropDownMenu_CreateInfo()
-            info.text = option
+            local displayText = GetOptionDisplayText(option, lockedLookup)
+            info.text = displayText
             info.value = option
             info.checked = selectedValue == option
             info.minWidth = group.menuWidth
             info.func = function()
                 SetDbValue(group.dbKey, option)
                 UIDropDownMenu_SetSelectedValue(group.dropdown, option)
-                UIDropDownMenu_SetText(group.dropdown, option)
+                UIDropDownMenu_SetText(group.dropdown, GetOptionDisplayText(option, lockedLookup))
                 if type(group.onSelected) == "function" then
                     group.onSelected(option)
                 end
@@ -281,6 +346,14 @@ local function UpdateDifficultyDependentWidgets(window, selectedDifficulty)
     local savedValue = SanitizeMythicPlusKeyLevel(Helpers.GetGlobalDb().mythicPlusKeyLevel)
     SetDbValue("mythicPlusKeyLevel", savedValue)
     widgets.input:SetText(tostring(savedValue))
+
+    -- Recompute displayed dungeon text markers (gray/normal) for the new difficulty.
+    if window.dungeonGroup then
+        RefreshDropdownGroup(window.dungeonGroup)
+    end
+    if window.mplusGroup then
+        RefreshDropdownGroup(window.mplusGroup)
+    end
 end
 
 local function CreateRunDcButton(window, parent, anchor)
@@ -328,7 +401,10 @@ local function CreateContentControls(window)
         "selectedDungeon",
         DungeonLists and DungeonLists.CollectCurrentExpansionDungeonNames,
         difficultyGroup,
-        GROUP_SPACING
+        GROUP_SPACING,
+        nil,
+        nil,
+        true
     )
     local mplusGroup = CreateDropdownGroup(
         section,
@@ -337,7 +413,10 @@ local function CreateContentControls(window)
         "selectedMythicPlusDungeon",
         DungeonLists and DungeonLists.CollectMythicPlusDungeonNames,
         difficultyGroup,
-        GROUP_SPACING
+        GROUP_SPACING,
+        nil,
+        nil,
+        true
     )
     CreateMythicPlusKeyWidgets(window, difficultyGroup)
 

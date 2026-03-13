@@ -79,18 +79,17 @@ local function CollectLockedDungeonNames()
 
     local total = GetNumSavedInstances()
     for index = 1, total do
-        local name, _, _, difficultyID, locked, extended, _, isRaid, maxPlayers, difficultyName = GetSavedInstanceInfo(index)
+        local name, _, _, _, locked, extended, _, isRaid, maxPlayers, difficultyName = GetSavedInstanceInfo(index)
         local hasLockout = locked or extended
         local isDungeon = not isRaid and (maxPlayers == nil or maxPlayers == 5)
-        local key = tostring(name) .. ":" .. tostring(difficultyID or difficultyName or "")
+        local resolvedDifficultyName = type(difficultyName) == "string" and difficultyName ~= "" and difficultyName or "Unknown"
+        local key = tostring(name) .. ":" .. resolvedDifficultyName
 
         if hasLockout and isDungeon and type(name) == "string" and name ~= "" and not seen[key] then
             seen[key] = true
             table.insert(lockedDungeons, {
                 name = name,
-                difficultyID = difficultyID,
-                difficultyName = type(difficultyName) == "string" and difficultyName ~= "" and difficultyName
-                    or ("Difficulty " .. tostring(difficultyID or "Unknown")),
+                difficultyName = resolvedDifficultyName,
                 locked = locked == true,
                 extended = extended == true,
             })
@@ -104,7 +103,7 @@ local function CollectLockedDungeonNames()
         if left.difficultyName ~= right.difficultyName then
             return left.difficultyName < right.difficultyName
         end
-        return tostring(left.difficultyID or "") < tostring(right.difficultyID or "")
+        return false
     end)
 
     return lockedDungeons

@@ -331,7 +331,7 @@ local function PrintLockedDungeonList()
     local formatted = {}
     for _, entry in ipairs(lockedDungeons) do
         if type(entry) == "table" and type(entry.name) == "string" and entry.name ~= "" then
-            local difficultyText = tostring(entry.difficultyName or entry.difficultyID or "Unknown")
+            local difficultyText = tostring(entry.difficultyName or "Unknown")
             table.insert(formatted, entry.name .. " (" .. difficultyText .. ")")
         elseif type(entry) == "string" and entry ~= "" then
             table.insert(formatted, entry)
