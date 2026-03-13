@@ -20,8 +20,9 @@ local MAIN_MARGIN_LEFT = 16
 local SECTION_MARGIN_TOP = -6
 local CHECKBOX_LABEL_MARGIN_LEFT = 5
 local SECTION_WIDTH = 280
-local DROPDOWN_MARGIN_LEFT_ADJUSTMENT = -13
 local RIGHT_SECTION_MARGIN_LEFT = 40
+local FULL_SECTION_WIDTH = SECTION_WIDTH * 2 + RIGHT_SECTION_MARGIN_LEFT
+local DROPDOWN_MARGIN_LEFT_ADJUSTMENT = -13
 
 
 local function CreateScrollableContent(panel)
@@ -165,11 +166,12 @@ local function CreatePostChannelSection(panel, anchorSection)
     return section
 end
 
-local function CreateTextSection(panel, anchorSection, title, valueKey, id)
+local function CreateTextSection(panel, anchorSection, title, valueKey, id, width)
+    local sectionWidth = width or SECTION_WIDTH
     local textValue = Helpers.GetGlobalDb()[valueKey]
     local section = CreateFrame("Frame", nil, panel)
     section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
-    section:SetSize(SECTION_WIDTH, 50)
+    section:SetSize(sectionWidth, 50)
 
     local textLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     textLabel:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
@@ -178,7 +180,7 @@ local function CreateTextSection(panel, anchorSection, title, valueKey, id)
     local textInput = CreateFrame("EditBox", id, section, "InputBoxTemplate")
     textInput:SetPoint("TOPLEFT", textLabel, "BOTTOMLEFT", 5, SECTION_MARGIN_TOP)
     textInput:SetAutoFocus(false)
-    textInput:SetWidth(SECTION_WIDTH)
+    textInput:SetWidth(sectionWidth)
     textInput:SetHeight(24)
     textInput:SetFontObject("GameFontNormal")
     textInput:SetTextColor(1, 1, 1, 1)
@@ -203,6 +205,22 @@ local function CreateTextSection(panel, anchorSection, title, valueKey, id)
         self:ClearFocus()
     end)
 
+
+    return section
+end
+
+local function CreateNeedTemplateGuideSection(panel, anchorSection, width)
+    local sectionWidth = width or SECTION_WIDTH
+    local section = CreateFrame("Frame", nil, panel)
+    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
+    section:SetSize(sectionWidth, 40)
+
+    local guide = section:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    guide:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
+    guide:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, 0)
+    guide:SetJustifyH("LEFT")
+    guide:SetJustifyV("TOP")
+    guide:SetText("Template tokens: %NEEDED%, %DUNGEON%, %DIFFICULTY%, %LEVEL%, %BL%")
 
     return section
 end
@@ -237,11 +255,8 @@ local function CreateRoleWordsSection(panel, anchorSection)
     local readyMessageSection = CreateTextSection(
         section, dpsPluralSection, "Ready message", "readyMessage", "JannetaDungeonCaller_ReadyMessage"
     )
-    local needMessageTemplateSection = CreateTextSection(
-        section, readyMessageSection, "Need message template", "needMessageTemplate", "JannetaDungeonCaller_NeedMessageTemplate"
-    )
     local needBlSuffixSection = CreateTextSection(
-        section, needMessageTemplateSection, "Need BL suffix", "needBlSuffix", "JannetaDungeonCaller_NeedBlSuffix"
+        section, readyMessageSection, "Need BL suffix", "needBlSuffix", "JannetaDungeonCaller_NeedBlSuffix"
     )
 
     return section
@@ -273,7 +288,7 @@ end
 local function CreateBlClassesSection(panel, anchorSection)
     local section = CreateFrame("Frame", nil, panel)
     section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
-    section:SetSize(SECTION_WIDTH, 200)
+    section:SetSize(SECTION_WIDTH, 100)
 
     local blClassesHeader = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     blClassesHeader:SetPoint("TOPLEFT", section, "TOPLEFT", 0, SECTION_MARGIN_TOP)
@@ -298,7 +313,18 @@ local function CreateBlClassesSection(panel, anchorSection)
     return section
 end
 
+local function CreateTemplateSection(panel, anchorSection)
+    local section = CreateFrame("Frame", nil, panel)
+    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
+    section:SetSize(FULL_SECTION_WIDTH, 150)
 
+    local needMessageTemplateSection = CreateTextSection(
+        section, section, "Message template", "needMessageTemplate", "JannetaDungeonCaller_NeedMessageTemplate", FULL_SECTION_WIDTH
+    )
+    local needTemplateGuideSection = CreateNeedTemplateGuideSection(section, needMessageTemplateSection, FULL_SECTION_WIDTH)
+
+    return section
+end
 
 local function SetupOptionsPanel()
     local panel = CreateOptionsPanel()
@@ -316,6 +342,8 @@ local function SetupOptionsPanel()
     local blClassesSection = CreateBlClassesSection(scrollContent, blRequirementSection)
 
     local roleWordsSection = CreateRoleWordsSection(scrollContent, titleSection)
+
+    local templateSection = CreateTemplateSection(scrollContent, blClassesSection)
 
 
     panel:SetScript("OnShow", function()

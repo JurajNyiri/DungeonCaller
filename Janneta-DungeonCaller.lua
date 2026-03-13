@@ -12,6 +12,8 @@ local REQUIRED_DPS = Constants.REQUIRED_DPS
 local CLASS_TOKENS = Constants.CLASS_TOKENS
 local Trim = Helpers.Trim
 local Pluralize = Helpers.Pluralize
+local MPLUS_MIN_KEY_LEVEL = 2
+local MPLUS_MAX_KEY_LEVEL = 99
 
 local db = Constants.NewDefaultDb()
 local DEBUG_MEMBER_LOG = true
@@ -38,6 +40,61 @@ local function GetRoleWords()
         dpsSingular = GetConfiguredWord("roleDpsSingular", "DPS"),
         dpsPlural = GetConfiguredWord("roleDpsPlural", "DPS"),
     }
+end
+
+local function BuildCaseInsensitiveTokenPattern(token)
+    local escaped = token:gsub("(%W)", "%%%1")
+    return escaped:gsub("%a", function(letter)
+        return "[" .. string.lower(letter) .. string.upper(letter) .. "]"
+    end)
+end
+
+local function ReplaceTokenCaseInsensitive(text, token, replacement)
+    local safeReplacement = tostring(replacement or "")
+    return text:gsub(BuildCaseInsensitiveTokenPattern(token), function()
+        return safeReplacement
+    end)
+end
+
+local function SanitizeMythicPlusKeyLevel(value)
+    local numeric = tonumber(value)
+    if not numeric then
+        return MPLUS_MIN_KEY_LEVEL
+    end
+
+    numeric = math.floor(numeric)
+    if numeric < MPLUS_MIN_KEY_LEVEL then
+        return MPLUS_MIN_KEY_LEVEL
+    end
+    if numeric > MPLUS_MAX_KEY_LEVEL then
+        return MPLUS_MAX_KEY_LEVEL
+    end
+
+    return numeric
+end
+
+local function GetSelectedDifficulty()
+    local difficulty = db.selectedDifficulty
+    if type(difficulty) ~= "string" or difficulty == "" then
+        return "Normal"
+    end
+    return difficulty
+end
+
+local function GetSelectedDungeonByDifficulty(difficulty)
+    if difficulty == "Mythic+" then
+        local mplusDungeon = db.selectedMythicPlusDungeon
+        if type(mplusDungeon) == "string" then
+            return mplusDungeon
+        end
+        return ""
+    end
+
+    local dungeon = db.selectedDungeon
+    if type(dungeon) == "string" then
+        return dungeon
+    end
+    return ""
 end
 
 local function CollectGroupMembers()
@@ -129,12 +186,28 @@ local function BuildRoleSummary()
     local function BuildNeedMessage(missingListText)
         local needTemplate = db.needMessageTemplate
         if type(needTemplate) ~= "string" or needTemplate == "" then
-            needTemplate = "Need %s"
+            needTemplate = "Need %NEEDED% for %DUNGEON% (%DIFFICULTY%%LEVEL%) %BL%"
         end
-        if not string.find(needTemplate, "%s", 1, true) then
-            needTemplate = needTemplate .. " %s"
+
+        local difficulty = GetSelectedDifficulty()
+        local selectedDungeon = GetSelectedDungeonByDifficulty(difficulty)
+        local levelText = ""
+        if difficulty == "Mythic+" then
+            levelText = tostring(SanitizeMythicPlusKeyLevel(db.mythicPlusKeyLevel))
         end
-        local formatted = needTemplate:gsub("%%s", missingListText)
+
+        local needsBlInsert = db.requireBl and missingBl > 0
+        local blSuffix = db.needBlSuffix
+        if type(blSuffix) ~= "string" or blSuffix == "" then
+            blSuffix = "including BL"
+        end
+        local formatted = needTemplate
+        formatted = ReplaceTokenCaseInsensitive(formatted, "%NEEDED%", missingListText)
+        formatted = ReplaceTokenCaseInsensitive(formatted, "%DUNGEON%", selectedDungeon)
+        formatted = ReplaceTokenCaseInsensitive(formatted, "%DIFFICULTY%", difficulty)
+        formatted = ReplaceTokenCaseInsensitive(formatted, "%LEVEL%", levelText)
+        formatted = ReplaceTokenCaseInsensitive(formatted, "%BL%", needsBlInsert and blSuffix or "")
+
         return formatted
     end
 
@@ -146,14 +219,6 @@ local function BuildRoleSummary()
         end
     else
         message = BuildNeedMessage(table.concat(missing, ", "))
-
-        if db.requireBl and missingBl > 0 then
-            local blSuffix = db.needBlSuffix
-            if type(blSuffix) ~= "string" or blSuffix == "" then
-                blSuffix = " and BL"
-            end
-            message = message .. blSuffix
-        end
 
         message = message .. "."
     end
