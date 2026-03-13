@@ -11,5 +11,7 @@ HelperFunctions.lua
 DungeonLists.lua
 DraggableWindow.lua
 MinimapButton.lua
-UI.lua
+UI\helper.lua
+UI\TemplateEditor.lua
+UI\Main.lua
 DungeonCaller.lua

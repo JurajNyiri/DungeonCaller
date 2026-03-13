@@ -57,6 +57,8 @@ function Constants.NewDefaultDb()
         selectedMythicPlusDungeon = "",
         selectedDifficulty = "Normal",
         mythicPlusKeyLevel = 2,
+        savedTemplates = {},
+        selectedTemplateName = "",
         blClasses = {},
     }
 

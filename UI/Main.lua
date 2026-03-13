@@ -4,14 +4,17 @@ addon.UI = addon.UI or {}
 local UI = addon.UI
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local UIHelpers = addon.UIHelpers
+local TemplateEditorUI = addon.TemplateEditorUI
 
 local CHANNEL_OPTIONS = Constants.CHANNEL_OPTIONS
 local CLASS_TOKENS = Constants.CLASS_TOKENS
-local Trim = Helpers.Trim
 local SetDbValue = Helpers.SetDbValue
 
 local optionsPanel
-local optionsCategory
+local optionsRootCategory
+local optionsMainCategory
+local optionsTemplateCategory
 local optionsInitError
 local db
 
@@ -24,9 +27,8 @@ local RIGHT_SECTION_MARGIN_LEFT = 40
 local FULL_SECTION_WIDTH = SECTION_WIDTH * 2 + RIGHT_SECTION_MARGIN_LEFT
 local DROPDOWN_MARGIN_LEFT_ADJUSTMENT = -13
 
-
 local function CreateScrollableContent(panel)
-    local scrollFrame = CreateFrame("ScrollFrame", "DungeonCallerOptionsScrollFrame", panel, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 8)
 
@@ -81,26 +83,40 @@ local function SetBlClassValue(classToken, enabled)
     end
 end
 
-local function CreateOptionsPanel()
-    local panel = CreateFrame("Frame", "DungeonCallerOptionsPanel", UIParent)
-    panel.name = "Dungeon Caller"
+local function CreateOptionsPanel(frameName, panelName)
+    local panel = CreateFrame("Frame", frameName, UIParent)
+    panel.name = panelName
     panel:SetWidth(520)
     panel:SetHeight(420)
     return panel
 end
 
-local function CreateTitlePanel(panel)
+local function CreateRootOptionsPanel()
+    local panel = CreateOptionsPanel("DungeonCallerOptionsPanel", "Dungeon Caller")
+
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", MAIN_MARGIN_LEFT, MAIN_MARGIN_TOP)
+    title:SetText("Dungeon Caller")
+
+    local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
+    subtitle:SetText("Choose 'Main' or 'Template editor' from the left menu.")
+
+    return panel
+end
+
+local function CreateTitlePanel(panel, titleText, subtitleText)
     local section = CreateFrame("Frame", nil, panel)
     section:SetPoint("TOPLEFT", panel, "TOPLEFT", MAIN_MARGIN_LEFT, MAIN_MARGIN_TOP)
     section:SetSize(488, 40)
 
     local title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
-    title:SetText("Dungeon Caller")
+    title:SetText(titleText or "Dungeon Caller")
 
     local subtitle = section:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
-    subtitle:SetText("Gather your team effortlessly")
+    subtitle:SetText(subtitleText or "Gather your team effortlessly.")
     section.title = title
     section.subtitle = subtitle
 
@@ -118,8 +134,8 @@ local function CreatePostChannelSection(panel, anchorSection)
 
     local channelDropdown = CreateFrame("Frame", "DungeonCaller_ChannelDropdown", section, "UIDropDownMenuTemplate")
     channelDropdown:SetPoint("TOPLEFT", channelLabel, "BOTTOMLEFT", MAIN_MARGIN_TOP, SECTION_MARGIN_TOP)
-    UIDropDownMenu_SetWidth(channelDropdown, SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
-    UIDropDownMenu_SetButtonWidth(channelDropdown, SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
+    UIDropDownMenu_SetWidth(channelDropdown, SECTION_WIDTH + DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
+    UIDropDownMenu_SetButtonWidth(channelDropdown, SECTION_WIDTH + DROPDOWN_MARGIN_LEFT_ADJUSTMENT)
 
     local channelDropdownButton = _G[channelDropdown:GetName() .. "Button"]
     UIDropDownMenu_SetAnchor(channelDropdown, -20, 0, "TOPLEFT", channelDropdownButton, "BOTTOMLEFT")
@@ -152,7 +168,7 @@ local function CreatePostChannelSection(panel, anchorSection)
             info.text = channelText
             info.value = channelValue
             info.checked = Helpers.GetGlobalDb().postChannel == channelValue
-            info.minWidth = SECTION_WIDTH+DROPDOWN_MARGIN_LEFT_ADJUSTMENT
+            info.minWidth = SECTION_WIDTH + DROPDOWN_MARGIN_LEFT_ADJUSTMENT
             info.func = function()
                 SetDbValue("postChannel", channelValue)
                 RefreshChannelDropdown()
@@ -167,104 +183,12 @@ local function CreatePostChannelSection(panel, anchorSection)
 end
 
 local function CreateTextSection(panel, anchorSection, title, valueKey, id, width)
-    local sectionWidth = width or SECTION_WIDTH
-    local textValue = Helpers.GetGlobalDb()[valueKey]
-    local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
-    section:SetSize(sectionWidth, 50)
-
-    local textLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    textLabel:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
-    textLabel:SetText(title)
-
-    local textInput = CreateFrame("EditBox", id, section, "InputBoxTemplate")
-    textInput:SetPoint("TOPLEFT", textLabel, "BOTTOMLEFT", 5, SECTION_MARGIN_TOP)
-    textInput:SetAutoFocus(false)
-    textInput:SetWidth(sectionWidth)
-    textInput:SetHeight(24)
-    textInput:SetFontObject("GameFontNormal")
-    textInput:SetTextColor(1, 1, 1, 1)
-    textInput:SetText(textValue or "")
-    textInput:HighlightText(0, 0)
-    textInput:SetCursorPosition(0)
-
-
-    local function Commit()
-        SetDbValue(valueKey, textInput:GetText() or "")
-    end
-
-    textInput:SetScript("OnEditFocusLost", function()
-        Commit()
-    end)
-    textInput:SetScript("OnEscapePressed", function(self)
-        self:SetText(textValue or "")
-        self:ClearFocus()
-    end)
-    textInput:SetScript("OnEnterPressed", function(self)
-        Commit()
-        self:ClearFocus()
-    end)
-
-
-    return section
+    return UIHelpers.CreateBoundTextSection(panel, anchorSection, title, valueKey, id, width, 0, 0)
 end
 
-local function CreateNeedTemplateGuideSection(panel, anchorSection, width)
-    local sectionWidth = width or SECTION_WIDTH
+local function CreateBlRequirementSection(panel, anchorSection, xOffset)
     local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
-    section:SetSize(sectionWidth, 40)
-
-    local guide = section:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    guide:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
-    guide:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, 0)
-    guide:SetJustifyH("LEFT")
-    guide:SetJustifyV("TOP")
-    guide:SetText("Template tokens: %NEEDED%, %DUNGEON%, %DIFFICULTY%, %LEVEL%, %BL%")
-
-    return section
-end
-
-local function CreateRoleWordsSection(panel, anchorSection)
-    local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", SECTION_WIDTH + RIGHT_SECTION_MARGIN_LEFT, SECTION_MARGIN_TOP-10)
-    section:SetSize(SECTION_WIDTH, 24)
-
-    local roleWordsHeader = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    roleWordsHeader:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
-    roleWordsHeader:SetText("Role words")
-
-    local tankSingularSection = CreateTextSection(
-        section, section, "Tank singular", "roleTankSingular", "DungeonCaller_RoleTankSingular"
-    )
-    local tankPluralSection = CreateTextSection(
-        section, tankSingularSection, "Tank plural", "roleTankPlural", "DungeonCaller_RoleTankPlural"
-    )
-    local healerSingularSection = CreateTextSection(
-        section, tankPluralSection, "Healer singular", "roleHealerSingular", "DungeonCaller_RoleHealerSingular"
-    )
-    local healerPluralSection = CreateTextSection(
-        section, healerSingularSection, "Healer plural", "roleHealerPlural", "DungeonCaller_RoleHealerPlural"
-    )
-    local dpsSingularSection = CreateTextSection(
-        section, healerPluralSection, "DPS singular", "roleDpsSingular", "DungeonCaller_RoleDpsSingular"
-    )
-    local dpsPluralSection = CreateTextSection(
-        section, dpsSingularSection, "DPS plural", "roleDpsPlural", "DungeonCaller_RoleDpsPlural"
-    )
-    local readyMessageSection = CreateTextSection(
-        section, dpsPluralSection, "Ready message", "readyMessage", "DungeonCaller_ReadyMessage"
-    )
-    local needBlSuffixSection = CreateTextSection(
-        section, readyMessageSection, "Need BL suffix", "needBlSuffix", "DungeonCaller_NeedBlSuffix"
-    )
-
-    return section
-end
-
-local function CreateBlRequirementSection(panel, anchorSection)
-    local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
+    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", xOffset or 0, SECTION_MARGIN_TOP - 10)
     section:SetSize(SECTION_WIDTH, 58)
 
     local blHeader = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -294,10 +218,10 @@ local function CreateBlClassesSection(panel, anchorSection)
     blClassesHeader:SetPoint("TOPLEFT", section, "TOPLEFT", 0, SECTION_MARGIN_TOP)
     blClassesHeader:SetText("Classes that have BL")
 
-    local CLASS_COLUMNS = 2
+    local classColumns = 2
     for index, token in ipairs(CLASS_TOKENS) do
-        local row = math.floor((index - 1) / CLASS_COLUMNS)
-        local col = (index - 1) % CLASS_COLUMNS
+        local row = math.floor((index - 1) / classColumns)
+        local col = (index - 1) % classColumns
 
         local cb = CreateFrame("CheckButton", nil, section, "UICheckButtonTemplate")
         cb:SetPoint("TOPLEFT", blClassesHeader, "BOTTOMLEFT", -5 + col * 130, SECTION_MARGIN_TOP - (row * 24))
@@ -313,53 +237,91 @@ local function CreateBlClassesSection(panel, anchorSection)
     return section
 end
 
-local function CreateTemplateSection(panel, anchorSection)
-    local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", 0, 0)
-    section:SetSize(FULL_SECTION_WIDTH, 150)
-
-    local needMessageTemplateSection = CreateTextSection(
-        section, section, "Message template", "needMessageTemplate", "DungeonCaller_NeedMessageTemplate", FULL_SECTION_WIDTH
-    )
-    local needTemplateGuideSection = CreateNeedTemplateGuideSection(section, needMessageTemplateSection, FULL_SECTION_WIDTH)
-
-    return section
-end
-
-local function SetupOptionsPanel()
-    local panel = CreateOptionsPanel()
-    local scrollContent, scrollFrame = CreateScrollableContent(panel)
-
-    local titleSection = CreateTitlePanel(scrollContent)
-
-    local postChannelSection = CreatePostChannelSection(scrollContent, titleSection)
-    local whisperTargetSection = CreateTextSection(
-        scrollContent, postChannelSection, "Whisper target", "whisperTarget", "DungeonCaller_WhisperTarget"
-    )
-
-    local blRequirementSection = CreateBlRequirementSection(scrollContent, whisperTargetSection)
-    
-    local blClassesSection = CreateBlClassesSection(scrollContent, blRequirementSection)
-
-    local roleWordsSection = CreateRoleWordsSection(scrollContent, titleSection)
-
-    local templateSection = CreateTemplateSection(scrollContent, blClassesSection)
-
-
+local function SetupScrollablePanelBehavior(panel, scrollContent, scrollFrame)
     panel:SetScript("OnShow", function()
         UpdateScrollContentHeight(scrollContent, scrollFrame)
         if scrollFrame then
             scrollFrame:SetVerticalScroll(0)
         end
+
+        if TemplateEditorUI and type(TemplateEditorUI.RefreshTemplateUiState) == "function" then
+            TemplateEditorUI.RefreshTemplateUiState()
+        end
     end)
     panel:SetScript("OnSizeChanged", function()
         UpdateScrollContentHeight(scrollContent, scrollFrame)
     end)
+end
 
-    optionsCategory = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-    Settings.RegisterAddOnCategory(optionsCategory)
+local function BuildMainOptionsPanel(panel)
+    local scrollContent, scrollFrame = CreateScrollableContent(panel)
 
-    return panel
+    local titleSection = CreateTitlePanel(scrollContent)
+    local postChannelSection = CreatePostChannelSection(scrollContent, titleSection)
+    local whisperTargetSection = CreateTextSection(
+        scrollContent, postChannelSection, "Whisper target", "whisperTarget", "DungeonCaller_WhisperTarget"
+    )
+
+    local rightColumnXOffset = SECTION_WIDTH + RIGHT_SECTION_MARGIN_LEFT
+    local blRequirementSection = CreateBlRequirementSection(scrollContent, titleSection, rightColumnXOffset)
+    local blClassesSection = CreateBlClassesSection(scrollContent, blRequirementSection)
+
+    local templateAnchor = CreateFrame("Frame", nil, scrollContent)
+    templateAnchor:SetSize(1, 1)
+    templateAnchor:SetPoint("TOPLEFT", blClassesSection, "BOTTOMLEFT", -rightColumnXOffset, 0)
+
+    TemplateEditorUI.CreateTemplateSection(
+        scrollContent,
+        templateAnchor,
+        FULL_SECTION_WIDTH
+    )
+
+    SetupScrollablePanelBehavior(panel, scrollContent, scrollFrame)
+end
+
+local function BuildTemplateEditorPanel(panel)
+    if not TemplateEditorUI or type(TemplateEditorUI.BuildTemplateEditorPanel) ~= "function" then
+        local fallbackTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        fallbackTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", MAIN_MARGIN_LEFT, MAIN_MARGIN_TOP)
+        fallbackTitle:SetText("Template editor")
+
+        local fallbackText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fallbackText:SetPoint("TOPLEFT", fallbackTitle, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
+        fallbackText:SetText("Template editor module failed to load.")
+        return
+    end
+
+    TemplateEditorUI.BuildTemplateEditorPanel(panel, {
+        createScrollableContent = CreateScrollableContent,
+        setupScrollablePanelBehavior = SetupScrollablePanelBehavior,
+        createTitlePanel = CreateTitlePanel,
+        fullSectionWidth = FULL_SECTION_WIDTH,
+    })
+end
+
+local function SetupOptionsPanel()
+    TemplateEditorUI.ResetState()
+
+    local rootPanel = CreateRootOptionsPanel()
+
+    local mainPanel = CreateOptionsPanel("DungeonCallerOptionsMainPanel", "Main")
+    BuildMainOptionsPanel(mainPanel)
+
+    local templateEditorPanel = CreateOptionsPanel("DungeonCallerOptionsTemplateEditorPanel", "Template editor")
+    BuildTemplateEditorPanel(templateEditorPanel)
+
+    optionsRootCategory = Settings.RegisterCanvasLayoutCategory(rootPanel, rootPanel.name)
+    Settings.RegisterAddOnCategory(optionsRootCategory)
+
+    optionsMainCategory = Settings.RegisterCanvasLayoutSubcategory(optionsRootCategory, mainPanel, mainPanel.name)
+    Settings.RegisterAddOnCategory(optionsMainCategory)
+
+    optionsTemplateCategory = Settings.RegisterCanvasLayoutSubcategory(optionsRootCategory, templateEditorPanel, templateEditorPanel.name)
+    Settings.RegisterAddOnCategory(optionsTemplateCategory)
+
+    TemplateEditorUI.RefreshTemplateUiState()
+
+    return rootPanel
 end
 
 function UI.SetDb(currentDb)
@@ -387,11 +349,15 @@ function UI.Initialize(currentDb)
 end
 
 function UI.OpenOptionsPanel()
-    Settings.OpenToCategory(optionsCategory:GetID())
+    local targetCategory = optionsMainCategory or optionsRootCategory
+    if not targetCategory then
+        return false
+    end
+
+    Settings.OpenToCategory(targetCategory:GetID())
     return true
 end
 
 function UI.GetInitError()
     return optionsInitError
 end
-
