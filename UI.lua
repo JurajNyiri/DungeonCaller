@@ -227,7 +227,7 @@ end
 
 local function CreateRoleWordsSection(panel, anchorSection)
     local section = CreateFrame("Frame", nil, panel)
-    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", SECTION_WIDTH + RIGHT_SECTION_MARGIN_LEFT, SECTION_MARGIN_TOP)
+    section:SetPoint("TOPLEFT", anchorSection, "BOTTOMLEFT", SECTION_WIDTH + RIGHT_SECTION_MARGIN_LEFT, SECTION_MARGIN_TOP-10)
     section:SetSize(SECTION_WIDTH, 24)
 
     local roleWordsHeader = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
