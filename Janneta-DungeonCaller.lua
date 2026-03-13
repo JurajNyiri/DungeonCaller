@@ -97,6 +97,14 @@ local function GetSelectedDungeonByDifficulty(difficulty)
     return ""
 end
 
+local function GetPlayerSpecializationRole()
+    local specializationIndex = GetSpecialization()
+    local role = GetSpecializationRole(specializationIndex)
+    if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
+        return role
+    end
+end
+
 local function CollectGroupMembers()
     local members = {}
     local inRaid = IsInRaid()
@@ -127,6 +135,9 @@ local function CollectGroupMembers()
             local memberName = UnitName(unit)
             local _, classToken = UnitClass(unit)
             local assignedRole = UnitGroupRolesAssigned(unit)
+            if unit == "player" and not inGroup and not inRaid and (assignedRole == nil or assignedRole == "NONE") then
+                assignedRole = GetPlayerSpecializationRole() or assignedRole
+            end
 
             table.insert(members, {
                 name = memberName,
@@ -186,7 +197,7 @@ local function BuildRoleSummary()
     local function BuildNeedMessage(missingListText)
         local needTemplate = db.needMessageTemplate
         if type(needTemplate) ~= "string" or needTemplate == "" then
-            needTemplate = "Need %NEEDED% for %DUNGEON% (%DIFFICULTY%%LEVEL%) %BL%"
+            needTemplate = "Need %NEEDED% for %DUNGEON% (%DIFFICULTY%%LEVEL%)%BL%."
         end
 
         local difficulty = GetSelectedDifficulty()
@@ -199,7 +210,7 @@ local function BuildRoleSummary()
         local needsBlInsert = db.requireBl and missingBl > 0
         local blSuffix = db.needBlSuffix
         if type(blSuffix) ~= "string" or blSuffix == "" then
-            blSuffix = "including BL"
+            blSuffix = " including BL"
         end
         local formatted = needTemplate
         formatted = ReplaceTokenCaseInsensitive(formatted, "%NEEDED%", missingListText)
@@ -219,8 +230,6 @@ local function BuildRoleSummary()
         end
     else
         message = BuildNeedMessage(table.concat(missing, ", "))
-
-        message = message .. "."
     end
 
     return {
