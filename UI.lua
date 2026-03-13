@@ -100,7 +100,7 @@ local function CreateTitlePanel(panel)
 
     local subtitle = section:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, SECTION_MARGIN_TOP)
-    subtitle:SetText("UwU")
+    subtitle:SetText("Gather your team effortlessly")
     section.title = title
     section.subtitle = subtitle
 
