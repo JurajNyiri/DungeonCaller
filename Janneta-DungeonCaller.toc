@@ -1,0 +1,11 @@
+## Interface: 120001
+## Title: Janneta Dungeon Caller
+## Notes: Announces remaining role invites for a standard tank/healer/3 DPS setup.
+## Author: Janneta
+## Version: 1.0
+## SavedVariables: JannetaDungeonCallerDB
+
+Const.lua
+HelperFunctions.lua
+UI.lua
+Janneta-DungeonCaller.lua
