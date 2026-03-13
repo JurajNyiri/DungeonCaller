@@ -7,5 +7,6 @@
 
 Const.lua
 HelperFunctions.lua
+DungeonLists.lua
 UI.lua
 Janneta-DungeonCaller.lua

@@ -3,6 +3,7 @@ local ADDON_NAME, addon = ...
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 local UI = addon.UI
+local DungeonLists = addon.DungeonLists
 
 local REQUIRED_TANKS = Constants.REQUIRED_TANKS
 local REQUIRED_HEALERS = Constants.REQUIRED_HEALERS
@@ -229,7 +230,34 @@ local function SendRoleReport()
     PostMessage(text)
 end
 
-local function OnSlashCommand()
+local function PrintDungeonLists()
+    local dungeons = {}
+    if type(DungeonLists.CollectCurrentExpansionDungeonNames) == "function" then
+        dungeons = DungeonLists.CollectCurrentExpansionDungeonNames()
+    end
+
+    local raids = {}
+    if type(DungeonLists.CollectRaidNames) == "function" then
+        raids = DungeonLists.CollectRaidNames()
+    end
+
+    local mplus = {}
+    if type(DungeonLists.CollectMythicPlusDungeonNames) == "function" then
+        mplus = DungeonLists.CollectMythicPlusDungeonNames()
+    end
+
+    print("JDC Current expansion dungeons (" .. tostring(#dungeons) .. "): " .. (#dungeons > 0 and table.concat(dungeons, ", ") or "none found"))
+    print("JDC Current expansion raids (" .. tostring(#raids) .. "): " .. (#raids > 0 and table.concat(raids, ", ") or "none found"))
+    print("JDC Mythic+ rotation (" .. tostring(#mplus) .. "): " .. (#mplus > 0 and table.concat(mplus, ", ") or "none found"))
+end
+
+local function OnSlashCommand(msg)
+    local command = string.lower(Trim(msg or ""))
+    if command == "dungeons" then
+        PrintDungeonLists()
+        return
+    end
+
     SendRoleReport()
 end
 
