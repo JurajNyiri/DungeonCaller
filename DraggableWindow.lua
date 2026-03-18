@@ -36,7 +36,8 @@ local DIFFICULTY_OPTIONS = {
 }
 
 local LOCKED_OPTION_COLOR_PREFIX = "|cff808080"
-local LOCKED_OPTION_COLOR_SUFFIX = "|r"
+local OUT_OF_ROTATION_OPTION_COLOR_PREFIX = "|cff006400"
+local OPTION_COLOR_SUFFIX = "|r"
 
 local frame
 
@@ -102,12 +103,59 @@ local function CollectLockedDungeonNameLookup()
     return lookup
 end
 
-local function GetOptionDisplayText(option, lockedLookup)
+local function CollectMythicPlusDungeonNameLookup()
+    local lookup = {}
+    local count = 0
+
+    for _, dungeonName in ipairs(DungeonLists.CollectMythicPlusDungeonNames()) do
+        local nameKey = BuildDungeonNameKey(dungeonName)
+        if nameKey ~= "" and not lookup[nameKey] then
+            lookup[nameKey] = true
+            count = count + 1
+        end
+    end
+
+    return lookup, count
+end
+
+local function BuildOptionDisplayContext(group)
+    local context = {
+        lockedLookup = nil,
+        mythicPlusLookup = nil,
+        highlightOutOfRotation = false,
+    }
+
+    if group.useLockoutHighlight then
+        context.lockedLookup = CollectLockedDungeonNameLookup()
+    end
+
+    local selectedDifficulty = Helpers.GetGlobalDb().selectedDifficulty
+    if group.useMythicOutOfRotationHighlight and selectedDifficulty == "Mythic" then
+        local mythicPlusLookup, lookupCount = CollectMythicPlusDungeonNameLookup()
+        if lookupCount > 0 then
+            context.mythicPlusLookup = mythicPlusLookup
+            context.highlightOutOfRotation = true
+        end
+    end
+
+    return context
+end
+
+local function GetOptionDisplayText(option, context)
     local optionName = tostring(option or "")
     local optionKey = BuildDungeonNameKey(optionName)
+
+    local lockedLookup = context and context.lockedLookup
     if optionKey ~= "" and lockedLookup and lockedLookup[optionKey] then
-        return LOCKED_OPTION_COLOR_PREFIX .. optionName .. LOCKED_OPTION_COLOR_SUFFIX
+        return LOCKED_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
     end
+
+    local shouldHighlightOutOfRotation = context and context.highlightOutOfRotation
+    local mythicPlusLookup = context and context.mythicPlusLookup
+    if optionKey ~= "" and shouldHighlightOutOfRotation and mythicPlusLookup and not mythicPlusLookup[optionKey] then
+        return OUT_OF_ROTATION_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
+    end
+
     return optionName
 end
 
@@ -165,8 +213,8 @@ local function RefreshDropdownGroup(group)
 
     if selectedValue ~= "" then
         local selectedText = selectedValue
-        if group.useLockoutHighlight then
-            selectedText = GetOptionDisplayText(selectedValue, CollectLockedDungeonNameLookup())
+        if group.useLockoutHighlight or group.useMythicOutOfRotationHighlight then
+            selectedText = GetOptionDisplayText(selectedValue, BuildOptionDisplayContext(group))
         end
 
         UIDropDownMenu_SetSelectedValue(group.dropdown, selectedValue)
@@ -194,6 +242,7 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     group.options = {}
     group.onSelected = onSelected
     group.useLockoutHighlight = useLockoutHighlight == true
+    group.useMythicOutOfRotationHighlight = false
 
     local heading = group:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     heading:SetPoint("TOPLEFT", group, "TOPLEFT", HEADING_LEFT, 0)
@@ -228,15 +277,12 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
             return
         end
 
-        local lockedLookup
-        if group.useLockoutHighlight then
-            lockedLookup = CollectLockedDungeonNameLookup()
-        end
+        local optionDisplayContext = BuildOptionDisplayContext(group)
 
         local selectedValue = Helpers.GetGlobalDb()[group.dbKey]
         for _, option in ipairs(group.options) do
             local info = UIDropDownMenu_CreateInfo()
-            local displayText = GetOptionDisplayText(option, lockedLookup)
+            local displayText = GetOptionDisplayText(option, optionDisplayContext)
             info.text = displayText
             info.value = option
             info.checked = selectedValue == option
@@ -244,7 +290,7 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
             info.func = function()
                 SetDbValue(group.dbKey, option)
                 UIDropDownMenu_SetSelectedValue(group.dropdown, option)
-                UIDropDownMenu_SetText(group.dropdown, GetOptionDisplayText(option, lockedLookup))
+                UIDropDownMenu_SetText(group.dropdown, GetOptionDisplayText(option, optionDisplayContext))
                 if type(group.onSelected) == "function" then
                     group.onSelected(option)
                 end
@@ -406,6 +452,7 @@ local function CreateContentControls(window)
         nil,
         true
     )
+    dungeonGroup.useMythicOutOfRotationHighlight = true
     local mplusGroup = CreateDropdownGroup(
         section,
         "M+ dungeons option",
