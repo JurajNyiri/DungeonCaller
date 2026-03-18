@@ -20,7 +20,7 @@ local function CollectCurrentExpansionDungeonNames()
         end
 
         local isDungeonType = typeID == 1 or typeID == 6
-        local isDungeonSubtype = subtypeID == 1 -- or subtypeID == 2 -- 2 are old dungeons in rotation
+        local isDungeonSubtype = subtypeID == 1 or subtypeID == 2 -- 2 are old dungeons in rotation
         local isNormalOrHeroic = difficulty == 1 or difficulty == 2 or difficulty == nil
         local isFivePlayer = (maxPlayers == 5) or (minPlayers == 5)
         local matchesExpansion = (currentExpansion == nil) or (expansionLevel == nil) or (expansionLevel == currentExpansion)
