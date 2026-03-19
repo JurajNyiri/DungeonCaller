@@ -286,6 +286,31 @@ local function NormalizeNameForLookup(value)
     return Trim(normalized)
 end
 
+local latestPreparedLfgTitleKey = ""
+
+local function MakePreparedLfgTitleKey(dungeonName, selectedDifficulty)
+    return NormalizeNameForLookup(dungeonName) .. "|" .. NormalizeNameForLookup(selectedDifficulty)
+end
+
+local function MarkPreparedLfgTitle(dungeonName, selectedDifficulty)
+    latestPreparedLfgTitleKey = MakePreparedLfgTitleKey(dungeonName, selectedDifficulty)
+end
+
+local function IsLfgTitlePreparedForSelection(dungeonName, selectedDifficulty)
+    local key = MakePreparedLfgTitleKey(dungeonName, selectedDifficulty)
+    if key == "|" then
+        return false
+    end
+    return latestPreparedLfgTitleKey == key
+end
+
+local function NotifyLfgSelectionChanged(dungeonName, selectedDifficulty)
+    if NormalizeNameForLookup(dungeonName) == "" then
+        latestPreparedLfgTitleKey = ""
+        return
+    end
+end
+
 local function ActivityMatchesSelectedDifficulty(activityInfo, selectedDifficulty)
     if selectedDifficulty == "Mythic+" then
         return activityInfo.isMythicPlusActivity == true
@@ -339,25 +364,34 @@ local function CreateLfgGroupForDungeon(dungeonName, selectedDifficulty)
         return false
     end
 
-    if LFGListFrame.EntryCreation.Name:GetText() == "" then
-        TrySetEntryTitleViaApi(activityID, activityInfo)
-    else
-        local createData = {
-            activityIDs = { activityID },
-            isAutoAccept = false,
-            isPrivateGroup = false,
-            newPlayerFriendly = false,
-            requiredItemLevel = 0,
-            requiredDungeonScore = 0,
-            requiredPvpRating = 0,
-            playstyle = Enum.LFGEntryGeneralPlaystyle.FunSerious
-        }
+    local shouldPrepareTitle = LFGListFrame.EntryCreation.Name:GetText() == "" or not IsLfgTitlePreparedForSelection(dungeonName, selectedDifficulty)
 
-        local ok, createResult = pcall(C_LFGList.CreateListing, createData)
+    if shouldPrepareTitle then
+        local ok, _ = TrySetEntryTitleViaApi(activityID, activityInfo)
+        if ok then
+            MarkPreparedLfgTitle(dungeonName, selectedDifficulty)
+        end
+        return ok
     end
+
+    local createData = {
+        activityIDs = { activityID },
+        isAutoAccept = false,
+        isPrivateGroup = false,
+        newPlayerFriendly = false,
+        requiredItemLevel = 0,
+        requiredDungeonScore = 0,
+        requiredPvpRating = 0,
+        playstyle = Enum.LFGEntryGeneralPlaystyle.FunSerious
+    }
+
+    local ok, createResult = pcall(C_LFGList.CreateListing, createData)
+    return ok
 end
 
 addon.CreateLfgGroupForDungeon = CreateLfgGroupForDungeon
+addon.IsLfgTitlePreparedForSelection = IsLfgTitlePreparedForSelection
+addon.NotifyLfgSelectionChanged = NotifyLfgSelectionChanged
 
 local function GetEnabledBlClassNames()
     local names = {}

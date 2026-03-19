@@ -24,6 +24,9 @@ local ACTION_BUTTON_GAP = 6
 local ACTION_BUTTON_FULL_WIDTH = WINDOW_WIDTH - (CONTENT_PADDING*3) + (DROPDOWN_LEFT_ADJUSTMENT) + 3
 local ACTION_BUTTON_WIDTH = math.floor((ACTION_BUTTON_FULL_WIDTH - ACTION_BUTTON_GAP) / 2)
 local ACTION_BUTTON_HEIGHT = 24
+local LIST_BUTTON_TEXT_LIST = "List"
+local LIST_BUTTON_TEXT_PREPARE = "Prepare LFG"
+local LIST_BUTTON_TEXT_DELIST = "Delist"
 local DIFFICULTY_DROPDOWN_FULL_WIDTH = DROPDOWN_WIDTH
 local KEY_LEVEL_EDITBOX_WIDTH = 36
 local KEY_LEVEL_EDITBOX_HEIGHT = 20
@@ -43,6 +46,61 @@ local OUT_OF_ROTATION_OPTION_COLOR_PREFIX = "|cff006400"
 local OPTION_COLOR_SUFFIX = "|r"
 
 local frame
+
+local function GetSelectedDungeonName()
+    local db = Helpers.GetGlobalDb()
+
+    local selectedDifficulty = db.selectedDifficulty
+    local selectedDungeon = ""
+    if selectedDifficulty == "Mythic+" then
+        selectedDungeon = db.selectedMythicPlusDungeon
+    else
+        selectedDungeon = db.selectedDungeon
+    end
+
+    if type(selectedDungeon) ~= "string" then
+        return ""
+    end
+
+    return Trim(selectedDungeon)
+end
+
+local function GetSelectedDifficultyName()
+    local db = Helpers.GetGlobalDb()
+    if type(db.selectedDifficulty) ~= "string" then
+        return ""
+    end
+    return Trim(db.selectedDifficulty)
+end
+
+local function DelistActiveLfgGroup()
+    if not C_LFGList.HasActiveEntryInfo() then
+        return false
+    end
+
+    return C_LFGList.RemoveListing()
+end
+
+local function HasPreparedLfgTitle()
+    if selectedDungeon == "" then
+        return false
+    end
+
+    return addon.IsLfgTitlePreparedForSelection(GetSelectedDungeonName(), GetSelectedDifficultyName())
+end
+
+local function RefreshListButtonText(window)
+    if C_LFGList.HasActiveEntryInfo() then
+        window.listButton:SetText(LIST_BUTTON_TEXT_DELIST)
+        return
+    end
+
+    if HasPreparedLfgTitle() then
+        window.listButton:SetText(LIST_BUTTON_TEXT_LIST)
+    else
+        window.listButton:SetText(LIST_BUTTON_TEXT_PREPARE)
+    end
+end
 
 local function RegisterAsSpecialFrame(frameName)
     if type(UISpecialFrames) ~= "table" then
@@ -405,32 +463,6 @@ local function UpdateDifficultyDependentWidgets(window, selectedDifficulty)
     end
 end
 
-local function GetSelectedDungeonName()
-    local db = Helpers.GetGlobalDb()
-
-    local selectedDifficulty = db.selectedDifficulty
-    local selectedDungeon = ""
-    if selectedDifficulty == "Mythic+" then
-        selectedDungeon = db.selectedMythicPlusDungeon
-    else
-        selectedDungeon = db.selectedDungeon
-    end
-
-    if type(selectedDungeon) ~= "string" then
-        return ""
-    end
-
-    return Trim(selectedDungeon)
-end
-
-local function GetSelectedDifficultyName()
-    local db = Helpers.GetGlobalDb()
-    if type(db.selectedDifficulty) ~= "string" then
-        return ""
-    end
-    return Trim(db.selectedDifficulty)
-end
-
 local function CreateSendButton(parent, anchor)
     local button = CreateFrame("Button", "DungeonCaller_RunDcButton", parent, "UIPanelButtonTemplate")
     button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", HEADING_LEFT, GROUP_SPACING)
@@ -453,8 +485,16 @@ local function CreateListButton(parent, sendButton)
     local button = CreateFrame("Button", "DungeonCaller_ListButton", parent, "UIPanelButtonTemplate")
     button:SetPoint("TOPLEFT", sendButton, "TOPRIGHT", ACTION_BUTTON_GAP, 0)
     button:SetSize(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT)
-    button:SetText("List")
+    button:SetText(LIST_BUTTON_TEXT_LIST)
     button:SetScript("OnClick", function()
+        local window = DraggableWindow.Initialize()
+
+        if C_LFGList.HasActiveEntryInfo() then
+            DelistActiveLfgGroup()
+            RefreshListButtonText(window)
+            return
+        end
+
         local selectedDungeon = GetSelectedDungeonName()
         if selectedDungeon == "" then
             print("Dungeon Caller: Select a dungeon first.")
@@ -462,6 +502,7 @@ local function CreateListButton(parent, sendButton)
         end
 
         addon.CreateLfgGroupForDungeon(selectedDungeon, GetSelectedDifficultyName())
+        RefreshListButtonText(window)
     end)
 
     return button
@@ -492,7 +533,9 @@ local function CreateContentControls(window)
         0,
         DIFFICULTY_DROPDOWN_FULL_WIDTH,
         function(selectedValue)
+            addon.NotifyLfgSelectionChanged(GetSelectedDungeonName(), selectedValue)
             UpdateDifficultyDependentWidgets(window, selectedValue)
+            RefreshListButtonText(window)
         end
     )
     local dungeonGroup = CreateDropdownGroup(
@@ -504,7 +547,10 @@ local function CreateContentControls(window)
         difficultyGroup,
         GROUP_SPACING,
         nil,
-        nil,
+        function()
+            addon.NotifyLfgSelectionChanged(GetSelectedDungeonName(), GetSelectedDifficultyName())
+            RefreshListButtonText(window)
+        end,
         true
     )
     dungeonGroup.useMythicOutOfRotationHighlight = true
@@ -517,7 +563,10 @@ local function CreateContentControls(window)
         difficultyGroup,
         GROUP_SPACING,
         nil,
-        nil,
+        function()
+            addon.NotifyLfgSelectionChanged(GetSelectedDungeonName(), GetSelectedDifficultyName())
+            RefreshListButtonText(window)
+        end,
         true
     )
     CreateMythicPlusKeyWidgets(window, difficultyGroup)
@@ -555,12 +604,21 @@ local function CreateWindow()
     CreateContentControls(window)
     window:SetScript("OnShow", function(self)
         RefreshDropdownGroups(self)
+        RefreshListButtonText(self)
     end)
 
     RegisterAsSpecialFrame(FRAME_NAME)
 
     return window
 end
+
+local listingStateFrame = CreateFrame("Frame")
+listingStateFrame:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+listingStateFrame:RegisterEvent("LFG_LIST_ENTRY_CREATION_FAILED")
+listingStateFrame:SetScript("OnEvent", function()
+    local window = DraggableWindow.Initialize()
+    RefreshListButtonText(window)
+end)
 
 function DraggableWindow.Initialize()
     if frame then
