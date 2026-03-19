@@ -382,11 +382,14 @@ local function CreateLfgGroupForDungeon(dungeonName, selectedDifficulty)
         requiredItemLevel = 0,
         requiredDungeonScore = 0,
         requiredPvpRating = 0,
-        playstyle = Enum.LFGEntryGeneralPlaystyle.FunSerious
+        generalPlaystyle = Enum.LFGEntryGeneralPlaystyle.FunSerious
     }
 
-    local ok, createResult = pcall(C_LFGList.CreateListing, createData)
-    return ok
+    local createResult = C_LFGList.CreateListing(createData)
+    if type(createResult) == "table" then
+        return createResult.success == true
+    end
+    return createResult == true
 end
 
 addon.CreateLfgGroupForDungeon = CreateLfgGroupForDungeon
