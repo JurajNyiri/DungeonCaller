@@ -374,11 +374,13 @@ local function CreateLfgGroupForDungeon(dungeonName, selectedDifficulty)
         return ok
     end
 
+    local isCrossFactionListing = activityInfo and activityInfo.allowCrossFaction == true
     local createData = {
         activityIDs = { activityID },
         isAutoAccept = false,
         isPrivateGroup = false,
         newPlayerFriendly = false,
+        isCrossFactionListing = isCrossFactionListing,
         requiredItemLevel = 0,
         requiredDungeonScore = 0,
         requiredPvpRating = 0,
