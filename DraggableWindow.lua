@@ -20,7 +20,10 @@ local KEY_RIGHT_PADDING = -10
 local DROPDOWN_TOP_ADJUSTMENT = -6
 local DROPDOWN_MENU_ANCHOR_X = -20
 local DROPDOWN_WIDTH = WINDOW_WIDTH - (CONTENT_PADDING*3) + (DROPDOWN_LEFT_ADJUSTMENT * 2)
-local BUTTON_WIDTH = WINDOW_WIDTH - (CONTENT_PADDING*3) + (DROPDOWN_LEFT_ADJUSTMENT) +3
+local ACTION_BUTTON_GAP = 6
+local ACTION_BUTTON_FULL_WIDTH = WINDOW_WIDTH - (CONTENT_PADDING*3) + (DROPDOWN_LEFT_ADJUSTMENT) + 3
+local ACTION_BUTTON_WIDTH = math.floor((ACTION_BUTTON_FULL_WIDTH - ACTION_BUTTON_GAP) / 2)
+local ACTION_BUTTON_HEIGHT = 24
 local DIFFICULTY_DROPDOWN_FULL_WIDTH = DROPDOWN_WIDTH
 local KEY_LEVEL_EDITBOX_WIDTH = 36
 local KEY_LEVEL_EDITBOX_HEIGHT = 20
@@ -402,10 +405,36 @@ local function UpdateDifficultyDependentWidgets(window, selectedDifficulty)
     end
 end
 
-local function CreateRunDcButton(window, parent, anchor)
+local function GetSelectedDungeonName()
+    local db = Helpers.GetGlobalDb()
+
+    local selectedDifficulty = db.selectedDifficulty
+    local selectedDungeon = ""
+    if selectedDifficulty == "Mythic+" then
+        selectedDungeon = db.selectedMythicPlusDungeon
+    else
+        selectedDungeon = db.selectedDungeon
+    end
+
+    if type(selectedDungeon) ~= "string" then
+        return ""
+    end
+
+    return Trim(selectedDungeon)
+end
+
+local function GetSelectedDifficultyName()
+    local db = Helpers.GetGlobalDb()
+    if type(db.selectedDifficulty) ~= "string" then
+        return ""
+    end
+    return Trim(db.selectedDifficulty)
+end
+
+local function CreateSendButton(parent, anchor)
     local button = CreateFrame("Button", "DungeonCaller_RunDcButton", parent, "UIPanelButtonTemplate")
     button:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", HEADING_LEFT, GROUP_SPACING)
-    button:SetSize(BUTTON_WIDTH, 24)
+    button:SetSize(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT)
     button:SetText("Send")
     button:SetScript("OnClick", function()
         local slashHandler = SlashCmdList and SlashCmdList["DUNGEONCALLER"]
@@ -417,7 +446,33 @@ local function CreateRunDcButton(window, parent, anchor)
         print("Dungeon Caller: /dc handler is not available.")
     end)
 
-    window.runDcButton = button
+    return button
+end
+
+local function CreateListButton(parent, sendButton)
+    local button = CreateFrame("Button", "DungeonCaller_ListButton", parent, "UIPanelButtonTemplate")
+    button:SetPoint("TOPLEFT", sendButton, "TOPRIGHT", ACTION_BUTTON_GAP, 0)
+    button:SetSize(ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT)
+    button:SetText("List")
+    button:SetScript("OnClick", function()
+        local selectedDungeon = GetSelectedDungeonName()
+        if selectedDungeon == "" then
+            print("Dungeon Caller: Select a dungeon first.")
+            return
+        end
+
+        addon.CreateLfgGroupForDungeon(selectedDungeon, GetSelectedDifficultyName())
+    end)
+
+    return button
+end
+
+local function CreateActionButtons(window, parent, anchor)
+    local sendButton = CreateSendButton(parent, anchor)
+    local listButton = CreateListButton(parent, sendButton)
+
+    window.runDcButton = sendButton
+    window.listButton = listButton
 end
 
 local function CreateContentControls(window)
@@ -470,7 +525,7 @@ local function CreateContentControls(window)
     window.difficultyGroup = difficultyGroup
     window.dungeonGroup = dungeonGroup
     window.mplusGroup = mplusGroup
-    CreateRunDcButton(window, section, dungeonGroup)
+    CreateActionButtons(window, section, dungeonGroup)
 
     window.dropdownGroups = {
         difficultyGroup,

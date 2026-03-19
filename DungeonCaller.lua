@@ -278,6 +278,87 @@ local function PostMessage(text)
     SendChatMessage(text, channel)
 end
 
+local function NormalizeNameForLookup(value)
+    local normalized = Trim(value)
+    normalized = string.lower(normalized)
+    normalized = normalized:gsub("[%p]", " ")
+    normalized = normalized:gsub("%s+", " ")
+    return Trim(normalized)
+end
+
+local function ActivityMatchesSelectedDifficulty(activityInfo, selectedDifficulty)
+    if selectedDifficulty == "Mythic+" then
+        return activityInfo.isMythicPlusActivity == true
+    end
+    if selectedDifficulty == "Mythic" then
+        return activityInfo.isMythicActivity == true and activityInfo.isMythicPlusActivity ~= true
+    end
+    if selectedDifficulty == "Heroic" then
+        return activityInfo.isHeroicActivity == true
+    end
+    if selectedDifficulty == "Normal" then
+        return activityInfo.isNormalActivity == true
+    end
+
+    return true
+end
+
+local function FindLfgActivityByDungeonName(dungeonName, selectedDifficulty)
+    local target = NormalizeNameForLookup(dungeonName)
+    for _, activityID in ipairs(C_LFGList.GetAvailableActivities() or {}) do
+        local info = C_LFGList.GetActivityInfoTable(activityID)
+        if ActivityMatchesSelectedDifficulty(info, selectedDifficulty) then
+            local shortName = NormalizeNameForLookup(info.shortName)
+            local fullName = NormalizeNameForLookup(info.fullName)
+            local fullNameWithoutShortName = fullName
+            if shortName ~= "" then
+                fullNameWithoutShortName = Trim(fullName:gsub(shortName, "", 1))
+            end
+
+            if fullNameWithoutShortName == target then
+                return activityID, info
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function TrySetEntryTitleViaApi(activityID, activityInfo)
+    return pcall(C_LFGList.SetEntryTitle, activityID, activityInfo.groupFinderActivityGroupID)
+end
+
+local function CreateLfgGroupForDungeon(dungeonName, selectedDifficulty)
+    if C_LFGList.HasActiveEntryInfo() then
+        print("Dungeon Caller: You already have an active LFG listing. Remove it first.")
+        return false
+    end
+
+    local activityID, activityInfo = FindLfgActivityByDungeonName(dungeonName, selectedDifficulty)
+    if not activityID then
+        print("Dungeon Caller: Could not find an LFG activity for '" .. tostring(dungeonName) .. "' on " .. selectedDifficulty .. ".")
+        return false
+    end
+
+    if LFGListFrame.EntryCreation.Name:GetText() == "" then
+        TrySetEntryTitleViaApi(activityID, activityInfo)
+    else
+        local createData = {
+            activityIDs = { activityID },
+            isAutoAccept = false,
+            isPrivateGroup = false,
+            newPlayerFriendly = false,
+            requiredItemLevel = 0,
+            requiredDungeonScore = 0,
+            requiredPvpRating = 0,
+            playstyle = Enum.LFGEntryGeneralPlaystyle.FunSerious
+        }
+
+        local ok, createResult = pcall(C_LFGList.CreateListing, createData)
+    end
+end
+
+addon.CreateLfgGroupForDungeon = CreateLfgGroupForDungeon
+
 local function GetEnabledBlClassNames()
     local names = {}
     for _, token in ipairs(CLASS_TOKENS) do
