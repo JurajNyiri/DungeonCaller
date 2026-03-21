@@ -12,6 +12,7 @@ local REQUIRED_DPS = Constants.REQUIRED_DPS
 local CLASS_TOKENS = Constants.CLASS_TOKENS
 local Trim = Helpers.Trim
 local Pluralize = Helpers.Pluralize
+local NormalizeNameForLookup = Helpers.NormalizeNameForLookup
 local MPLUS_MIN_KEY_LEVEL = 2
 local MPLUS_MAX_KEY_LEVEL = 99
 
@@ -278,14 +279,6 @@ local function PostMessage(text)
     SendChatMessage(text, channel)
 end
 
-local function NormalizeNameForLookup(value)
-    local normalized = Trim(value)
-    normalized = string.lower(normalized)
-    normalized = normalized:gsub("[%p]", " ")
-    normalized = normalized:gsub("%s+", " ")
-    return Trim(normalized)
-end
-
 local latestPreparedLfgTitleKey = ""
 
 local function MakePreparedLfgTitleKey(dungeonName, selectedDifficulty)
@@ -348,6 +341,82 @@ local function FindLfgActivityByDungeonName(dungeonName, selectedDifficulty)
     return nil, nil
 end
 
+local function GetEncounterJournalDifficultyID(selectedDifficulty)
+    if selectedDifficulty == "Normal" then
+        return 1
+    end
+    if selectedDifficulty == "Heroic" then
+        return 2
+    end
+    if selectedDifficulty == "Mythic" or selectedDifficulty == "Mythic+" then
+        return 23
+    end
+
+    return nil
+end
+
+local function ResolveEncounterJournalInstanceID(mapID)
+    local journalInstanceID = C_EncounterJournal.GetInstanceForGameMap(mapID)
+    if type(journalInstanceID) == "number" then
+        return journalInstanceID
+    end
+
+    return nil
+end
+
+local function EnsureEncounterJournalLoaded()
+    if EncounterJournal then
+        return true
+    end
+
+    ToggleEncounterJournal()
+
+    if EncounterJournal then
+        return true
+    end
+
+    return EncounterJournal ~= nil
+end
+
+local function OpenEncounterJournalForDungeon(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
+    local mapID
+    local journalDifficultyID = GetEncounterJournalDifficultyID(selectedDifficulty)
+
+    if DungeonLists and type(DungeonLists.GetJournalMapIDForDungeon) == "function" then
+        mapID = DungeonLists.GetJournalMapIDForDungeon(dungeonName, selectedDifficulty)
+    end
+
+    if not mapID then
+        print("Dungeon Caller: Could not resolve a map for '" .. tostring(dungeonName) .. "' on " .. tostring(selectedDifficulty) .. ".")
+        return false
+    end
+
+    local journalInstanceID = ResolveEncounterJournalInstanceID(mapID)
+    if not journalInstanceID then
+        print("Dungeon Caller: Could not resolve an Adventure Guide entry for '" .. tostring(dungeonName) .. "'.")
+        return false
+    end
+
+    if not EnsureEncounterJournalLoaded() or type(EncounterJournal_OpenJournal) ~= "function" then
+        print("Dungeon Caller: Could not load the Adventure Guide.")
+        return false
+    end
+
+    if selectedDifficulty == "Mythic+" then
+        C_EncounterJournal.SetPreviewMythicPlusLevel(SanitizeMythicPlusKeyLevel(mythicPlusKeyLevel))
+    end
+
+    if type(journalDifficultyID) ~= "number" then
+        journalDifficultyID = nil
+    end
+
+    EncounterJournal_OpenJournal(journalDifficultyID, journalInstanceID)
+    if type(journalDifficultyID) == "number" then
+        EJ_SetDifficulty(journalDifficultyID)
+    end
+    return true
+end
+
 local function TrySetEntryTitleViaApi(activityID, activityInfo)
     return pcall(C_LFGList.SetEntryTitle, activityID, activityInfo.groupFinderActivityGroupID)
 end
@@ -395,6 +464,7 @@ local function CreateLfgGroupForDungeon(dungeonName, selectedDifficulty)
 end
 
 addon.CreateLfgGroupForDungeon = CreateLfgGroupForDungeon
+addon.OpenEncounterJournalForDungeon = OpenEncounterJournalForDungeon
 addon.IsLfgTitlePreparedForSelection = IsLfgTitlePreparedForSelection
 addon.NotifyLfgSelectionChanged = NotifyLfgSelectionChanged
 

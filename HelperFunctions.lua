@@ -49,6 +49,14 @@ function Helpers.Trim(value)
     return (value:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+function Helpers.NormalizeNameForLookup(value)
+    local normalized = Helpers.Trim(value)
+    normalized = string.lower(normalized)
+    normalized = normalized:gsub("[%p]", " ")
+    normalized = normalized:gsub("%s+", " ")
+    return Helpers.Trim(normalized)
+end
+
 function Helpers.Pluralize(value, singular, plural)
     if value == 1 then
         return tostring(value) .. " " .. singular

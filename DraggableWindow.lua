@@ -24,6 +24,9 @@ local ACTION_BUTTON_GAP = 6
 local ACTION_BUTTON_FULL_WIDTH = WINDOW_WIDTH - (CONTENT_PADDING*3) + (DROPDOWN_LEFT_ADJUSTMENT) + 3
 local ACTION_BUTTON_WIDTH = math.floor((ACTION_BUTTON_FULL_WIDTH - ACTION_BUTTON_GAP) / 2)
 local ACTION_BUTTON_HEIGHT = 24
+local GUIDE_BUTTON_GAP = 4
+local GUIDE_BUTTON_SIZE = 22
+local GUIDE_BUTTON_ICON = "Interface\\Icons\\INV_Misc_Book_09"
 local LIST_BUTTON_TEXT_LIST = "List"
 local LIST_BUTTON_TEXT_PREPARE = "Prepare LFG"
 local LIST_BUTTON_TEXT_DELIST = "Delist"
@@ -100,6 +103,25 @@ local function RefreshListButtonText(window)
     else
         window.listButton:SetText(LIST_BUTTON_TEXT_PREPARE)
     end
+end
+
+local function OpenSelectedDungeonInAdventureGuide()
+    local selectedDungeon = GetSelectedDungeonName()
+    if selectedDungeon == "" then
+        print("Dungeon Caller: Select a dungeon first.")
+        return false
+    end
+
+    if type(addon.OpenEncounterJournalForDungeon) ~= "function" then
+        print("Dungeon Caller: Adventure Guide integration is not available.")
+        return false
+    end
+
+    return addon.OpenEncounterJournalForDungeon(
+        selectedDungeon,
+        GetSelectedDifficultyName(),
+        Helpers.GetGlobalDb().mythicPlusKeyLevel
+    )
 end
 
 local function RegisterAsSpecialFrame(frameName)
@@ -283,6 +305,12 @@ local function RefreshDropdownGroup(group)
         if type(group.onSelected) == "function" then
             group.onSelected(selectedValue)
         end
+        if group.guideButton then
+            group.guideButton:SetEnabled(true)
+            if type(group.guideButton.UpdateVisualState) == "function" then
+                group.guideButton:UpdateVisualState()
+            end
+        end
         return
     end
 
@@ -291,9 +319,15 @@ local function RefreshDropdownGroup(group)
     if type(group.onSelected) == "function" then
         group.onSelected("")
     end
+    if group.guideButton then
+        group.guideButton:SetEnabled(false)
+        if type(group.guideButton.UpdateVisualState) == "function" then
+            group.guideButton:UpdateVisualState()
+        end
+    end
 end
 
-local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, optionProvider, anchor, yOffset, width, onSelected, useLockoutHighlight)
+local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, optionProvider, anchor, yOffset, width, onSelected, useLockoutHighlight, onGuideOpen)
     local group = CreateFrame("Frame", nil, parent)
     group:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
     group:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
@@ -304,6 +338,7 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     group.onSelected = onSelected
     group.useLockoutHighlight = useLockoutHighlight == true
     group.useMythicOutOfRotationHighlight = false
+    group.onGuideOpen = onGuideOpen
 
     local heading = group:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     heading:SetPoint("TOPLEFT", group, "TOPLEFT", HEADING_LEFT, 0)
@@ -313,6 +348,9 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     local dropdown = CreateFrame("Frame", dropdownName, group, "UIDropDownMenuTemplate")
     dropdown:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", DROPDOWN_LEFT_ADJUSTMENT, DROPDOWN_TOP_ADJUSTMENT)
     group.menuWidth = width or DROPDOWN_WIDTH
+    if type(onGuideOpen) == "function" then
+        group.menuWidth = group.menuWidth - GUIDE_BUTTON_SIZE - GUIDE_BUTTON_GAP
+    end
     UIDropDownMenu_SetWidth(dropdown, group.menuWidth)
     UIDropDownMenu_SetButtonWidth(dropdown, group.menuWidth)
     UIDropDownMenu_SetText(dropdown, "")
@@ -321,6 +359,54 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     local dropdownButton = _G[dropdown:GetName() .. "Button"]
     if dropdownButton then
         UIDropDownMenu_SetAnchor(dropdown, DROPDOWN_MENU_ANCHOR_X, 0, "TOPLEFT", dropdownButton, "BOTTOMLEFT")
+    end
+
+    if type(onGuideOpen) == "function" then
+        local guideButton = CreateFrame("Button", nil, group, "UIPanelButtonTemplate")
+        if dropdownButton then
+            guideButton:SetPoint("LEFT", dropdownButton, "RIGHT", GUIDE_BUTTON_GAP, 0)
+        else
+            guideButton:SetPoint("LEFT", dropdown, "RIGHT", GUIDE_BUTTON_GAP, 0)
+        end
+        guideButton:SetSize(GUIDE_BUTTON_SIZE, GUIDE_BUTTON_SIZE)
+        guideButton:SetText("")
+
+        local icon = guideButton:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", guideButton, "TOPLEFT", 4, -4)
+        icon:SetPoint("BOTTOMRIGHT", guideButton, "BOTTOMRIGHT", -4, 4)
+        icon:SetTexture(GUIDE_BUTTON_ICON)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        guideButton.icon = icon
+
+        function guideButton:UpdateVisualState()
+            local enabled = self:IsEnabled()
+            if self.icon then
+                if type(self.icon.SetDesaturated) == "function" then
+                    self.icon:SetDesaturated(not enabled)
+                end
+                if enabled then
+                    self.icon:SetVertexColor(1, 1, 1)
+                else
+                    self.icon:SetVertexColor(0.5, 0.5, 0.5)
+                end
+            end
+        end
+
+        guideButton:SetScript("OnClick", function()
+            onGuideOpen()
+        end)
+        guideButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Open Adventure Guide")
+            GameTooltip:AddLine("Opens the selected dungeon in the Encounter Journal.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        guideButton:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        guideButton:SetEnabled(false)
+        guideButton:UpdateVisualState()
+        group.guideButton = guideButton
     end
 
     UIDropDownMenu_Initialize(dropdown, function(_, level)
@@ -340,7 +426,6 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
 
         local optionDisplayContext = BuildOptionDisplayContext(group)
 
-        local selectedValue = Helpers.GetGlobalDb()[group.dbKey]
         for _, option in ipairs(group.options) do
             local info = UIDropDownMenu_CreateInfo()
             local displayText = GetOptionDisplayText(option, optionDisplayContext)
@@ -551,7 +636,8 @@ local function CreateContentControls(window)
             addon.NotifyLfgSelectionChanged(GetSelectedDungeonName(), GetSelectedDifficultyName())
             RefreshListButtonText(window)
         end,
-        true
+        true,
+        OpenSelectedDungeonInAdventureGuide
     )
     dungeonGroup.useMythicOutOfRotationHighlight = true
     local mplusGroup = CreateDropdownGroup(
@@ -567,7 +653,8 @@ local function CreateContentControls(window)
             addon.NotifyLfgSelectionChanged(GetSelectedDungeonName(), GetSelectedDifficultyName())
             RefreshListButtonText(window)
         end,
-        true
+        true,
+        OpenSelectedDungeonInAdventureGuide
     )
     CreateMythicPlusKeyWidgets(window, difficultyGroup)
 

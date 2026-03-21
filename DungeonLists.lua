@@ -2,8 +2,10 @@ local _, addon = ...
 
 addon.DungeonLists = addon.DungeonLists or {}
 local DungeonLists = addon.DungeonLists
+local Helpers = addon.Helpers
+local NormalizeNameForLookup = Helpers.NormalizeNameForLookup
 
-local function CollectCurrentExpansionDungeonNames()
+local function CollectCurrentExpansionDungeonEntries()
     local dungeons = {}
     local seen = {}
 
@@ -14,7 +16,7 @@ local function CollectCurrentExpansionDungeonNames()
             return
         end
 
-        local name, typeID, subtypeID, _, _, _, _, _, expansionLevel, _, _, difficulty, maxPlayers, _, _, _, minPlayers, isTimeWalker = GetLFGDungeonInfo(lfgDungeonID)
+        local name, typeID, subtypeID, _, _, _, _, _, expansionLevel, _, _, difficulty, maxPlayers, _, _, _, minPlayers, isTimeWalker, _, _, _, lfgMapID = GetLFGDungeonInfo(lfgDungeonID)
         if type(name) ~= "string" or name == "" or seen[name] then
             return
         end
@@ -27,7 +29,11 @@ local function CollectCurrentExpansionDungeonNames()
 
         if isDungeonType and isDungeonSubtype and isNormalOrHeroic and isFivePlayer and not isTimeWalker and matchesExpansion then
             seen[name] = true
-            table.insert(dungeons, name)
+            table.insert(dungeons, {
+                name = name,
+                mapID = lfgMapID,
+                lfgDungeonID = lfgDungeonID,
+            })
         end
     end
 
@@ -36,41 +42,106 @@ local function CollectCurrentExpansionDungeonNames()
         TryAddByDungeonID(dungeonID)
     end
 
-    table.sort(dungeons)
+    table.sort(dungeons, function(left, right)
+        return left.name < right.name
+    end)
     return dungeons
 end
 
-local function CollectRaidNames()
+local function CollectCurrentExpansionDungeonNames()
+    local dungeons = {}
+    for _, entry in ipairs(CollectCurrentExpansionDungeonEntries()) do
+        table.insert(dungeons, entry.name)
+    end
+    return dungeons
+end
+
+local function CollectRaidEntries()
     local raids = {}
     local seen = {}
 
     local currentExpansion = type(GetExpansionLevel) == "function" and GetExpansionLevel() or nil
     local total = GetNumRFDungeons()
     for index = 1, total do
-        local dungeonID, name = GetRFDungeonInfo(index)
-        if dungeonID and not seen[name] then
-            local _, _, _, _, _, _, _, _, expansionLevel = GetLFGDungeonInfo(dungeonID)
-            if expansionLevel == currentExpansion then
-                seen[name] = true
-                table.insert(raids, name)
-            end
+        local dungeonID, name, _, _, _, _, _, _, _, expansionLevel, _, _, _, _, _, _, _, _, _, _, _, _, lfgMapID = GetRFDungeonInfo(index)
+        if dungeonID and not seen[name] and expansionLevel == currentExpansion then
+            seen[name] = true
+            table.insert(raids, {
+                name = name,
+                mapID = lfgMapID,
+                lfgDungeonID = dungeonID,
+            })
         end
     end
 
-    table.sort(raids)
+    table.sort(raids, function(left, right)
+        return left.name < right.name
+    end)
     return raids
+end
+
+local function CollectRaidNames()
+    local raids = {}
+    for _, entry in ipairs(CollectRaidEntries()) do
+        table.insert(raids, entry.name)
+    end
+    return raids
+end
+
+local function CollectMythicPlusDungeonEntries()
+    local maps = {}
+
+    for _, challengeMapID in ipairs(C_ChallengeMode.GetMapTable() or {}) do
+        local name, _, _, _, _, mapID = C_ChallengeMode.GetMapUIInfo(challengeMapID)
+        if type(name) == "string" and name ~= "" then
+            table.insert(maps, {
+                name = name,
+                mapID = mapID,
+                challengeMapID = challengeMapID,
+            })
+        end
+    end
+
+    table.sort(maps, function(left, right)
+        return left.name < right.name
+    end)
+    return maps
 end
 
 local function CollectMythicPlusDungeonNames()
     local maps = {}
+    for _, entry in ipairs(CollectMythicPlusDungeonEntries()) do
+        table.insert(maps, entry.name)
+    end
+    return maps
+end
 
-    for _, mapID in ipairs(C_ChallengeMode.GetMapTable() or {}) do
-        local name = C_ChallengeMode.GetMapUIInfo(mapID)
-        table.insert(maps, name)
+local function FindMapIDByName(entries, dungeonName)
+    local target = NormalizeNameForLookup(dungeonName)
+    if target == "" then
+        return nil
     end
 
-    table.sort(maps)
-    return maps
+    for _, entry in ipairs(entries or {}) do
+        if NormalizeNameForLookup(entry.name) == target and type(entry.mapID) == "number" then
+            return entry.mapID
+        end
+    end
+
+    return nil
+end
+
+local function GetJournalMapIDForDungeon(dungeonName, selectedDifficulty)
+    if selectedDifficulty == "Mythic+" then
+        return FindMapIDByName(CollectMythicPlusDungeonEntries(), dungeonName)
+    end
+
+    local mapID = FindMapIDByName(CollectCurrentExpansionDungeonEntries(), dungeonName)
+    if mapID then
+        return mapID
+    end
+
+    return FindMapIDByName(CollectRaidEntries(), dungeonName)
 end
 
 local function CollectLockedDungeonNames()
@@ -113,3 +184,4 @@ DungeonLists.CollectCurrentExpansionDungeonNames = CollectCurrentExpansionDungeo
 DungeonLists.CollectRaidNames = CollectRaidNames
 DungeonLists.CollectMythicPlusDungeonNames = CollectMythicPlusDungeonNames
 DungeonLists.CollectLockedDungeonNames = CollectLockedDungeonNames
+DungeonLists.GetJournalMapIDForDungeon = GetJournalMapIDForDungeon
