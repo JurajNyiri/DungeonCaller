@@ -57,6 +57,36 @@ local function ReplaceTokenCaseInsensitive(text, token, replacement)
     end)
 end
 
+local ITEM_UPGRADE_TRACK_LABELS = {
+    [972] = "Veteran",
+    [973] = "Champion",
+    [974] = "Hero",
+    [975] = "Myth",
+}
+
+local EQUIP_LOC_TO_SLOT_IDS = {
+    INVTYPE_HEAD = { 1 },
+    INVTYPE_NECK = { 2 },
+    INVTYPE_SHOULDER = { 3 },
+    INVTYPE_CHEST = { 5 },
+    INVTYPE_ROBE = { 5 },
+    INVTYPE_WAIST = { 6 },
+    INVTYPE_LEGS = { 7 },
+    INVTYPE_FEET = { 8 },
+    INVTYPE_WRIST = { 9 },
+    INVTYPE_HAND = { 10 },
+    INVTYPE_FINGER = { 11, 12 },
+    INVTYPE_TRINKET = { 13, 14 },
+    INVTYPE_CLOAK = { 15 },
+    INVTYPE_WEAPONMAINHAND = { 16 },
+    INVTYPE_2HWEAPON = { 16 },
+    INVTYPE_RANGED = { 16 },
+    INVTYPE_RANGEDRIGHT = { 16 },
+    INVTYPE_WEAPONOFFHAND = { 17 },
+    INVTYPE_HOLDABLE = { 17 },
+    INVTYPE_SHIELD = { 17 },
+}
+
 local function SanitizeMythicPlusKeyLevel(value)
     local numeric = tonumber(value)
     if not numeric then
@@ -280,6 +310,21 @@ local function PostMessage(text)
 end
 
 local latestPreparedLfgTitleKey = ""
+local dungeonLootCache = {}
+-- Background loot scans use API calls directly and avoid loading the Blizzard Encounter Journal UI.
+local ENABLE_ENCOUNTER_JOURNAL_LOOT_SCAN = true
+
+local function SecureBlizzardCall(func, ...)
+    if type(func) ~= "function" then
+        return nil
+    end
+
+    return securecallfunction(func, ...)
+end
+
+local function IsEncounterJournalVisible()
+    return EncounterJournal and EncounterJournal:IsShown() == true
+end
 
 local function MakePreparedLfgTitleKey(dungeonName, selectedDifficulty)
     return NormalizeNameForLookup(dungeonName) .. "|" .. NormalizeNameForLookup(selectedDifficulty)
@@ -356,7 +401,13 @@ local function GetEncounterJournalDifficultyID(selectedDifficulty)
 end
 
 local function ResolveEncounterJournalInstanceID(mapID)
-    local journalInstanceID = C_EncounterJournal.GetInstanceForGameMap(mapID)
+    if type(mapID) ~= "number" then
+        return nil
+    end
+
+    local journalInstanceID = type(C_EncounterJournal) == "table"
+        and SecureBlizzardCall(C_EncounterJournal.GetInstanceForGameMap, mapID)
+        or nil
     if type(journalInstanceID) == "number" then
         return journalInstanceID
     end
@@ -364,18 +415,322 @@ local function ResolveEncounterJournalInstanceID(mapID)
     return nil
 end
 
-local function EnsureEncounterJournalLoaded()
+local function LoadEncounterJournalUi()
     if EncounterJournal then
         return true
     end
 
-    ToggleEncounterJournal()
-
+    if type(EncounterJournal_LoadUI) == "function" then
+        securecallfunction(EncounterJournal_LoadUI)
+    end
     if EncounterJournal then
         return true
     end
 
     return EncounterJournal ~= nil
+end
+
+local function EnsureEncounterJournalLoaded()
+    if LoadEncounterJournalUi() then
+        return true
+    end
+
+    if type(ToggleEncounterJournal) == "function" then
+        securecallfunction(ToggleEncounterJournal)
+    end
+
+    return EncounterJournal ~= nil
+end
+
+local function GetCurrentPlayerClassAndSpecIDs()
+    local _, _, classID = UnitClass("player")
+    local specializationIndex = GetSpecialization()
+    local specID = 0
+
+    if specializationIndex and specializationIndex > 0 then
+        specID = select(1, GetSpecializationInfo(specializationIndex)) or 0
+    end
+
+    return classID, specID
+end
+
+local function BuildDungeonLootCacheKey(dungeonName, selectedDifficulty, classID, specID, mythicPlusKeyLevel)
+    local cacheKey = NormalizeNameForLookup(dungeonName) .. "|" .. NormalizeNameForLookup(selectedDifficulty)
+        .. "|" .. tostring(classID or 0) .. "|" .. tostring(specID or 0)
+
+    if selectedDifficulty == "Mythic+" then
+        cacheKey = cacheKey .. "|" .. tostring(SanitizeMythicPlusKeyLevel(mythicPlusKeyLevel))
+    end
+
+    return cacheKey
+end
+
+local function GetInventorySlotIDsForEquipLocation(equipLoc)
+    if equipLoc == "INVTYPE_WEAPON" then
+        if type(CanDualWield) == "function" and CanDualWield() then
+            return { 16, 17 }
+        end
+        return { 16 }
+    end
+
+    return EQUIP_LOC_TO_SLOT_IDS[equipLoc]
+end
+
+local function GetItemLevel(itemReference)
+    if not itemReference then
+        return nil
+    end
+
+    local itemLevel = C_Item.GetDetailedItemLevelInfo(itemReference)
+
+    if type(itemLevel) == "number" and itemLevel > 0 then
+        return itemLevel
+    end
+
+    return nil
+end
+
+local function GetUpgradeTrackInfo(itemReference)
+    if not itemReference or type(C_Item) ~= "table" or type(C_Item.GetItemUpgradeInfo) ~= "function" then
+        return nil, nil, nil, nil
+    end
+
+    local upgradeInfo = C_Item.GetItemUpgradeInfo(itemReference)
+    if type(upgradeInfo) ~= "table" then
+        return nil, nil, nil, nil
+    end
+
+    local trackLabel = upgradeInfo.trackString
+    if type(trackLabel) == "string" then
+        trackLabel = Trim(trackLabel)
+    end
+    if trackLabel == "" then
+        trackLabel = nil
+    end
+
+    local trackID = type(upgradeInfo.trackStringID) == "number" and upgradeInfo.trackStringID or nil
+    if not trackLabel and trackID then
+        trackLabel = ITEM_UPGRADE_TRACK_LABELS[trackID]
+    end
+
+    return trackLabel, trackID, tonumber(upgradeInfo.currentLevel), tonumber(upgradeInfo.maxLevel)
+end
+
+local function BuildEquippedItemComparisons(slotIDs)
+    local comparisons = {}
+    if type(slotIDs) ~= "table" then
+        return comparisons
+    end
+
+    for _, slotID in ipairs(slotIDs) do
+        local equippedItemLink = GetInventoryItemLink("player", slotID)
+        table.insert(comparisons, {
+            slotID = slotID,
+            itemLink = equippedItemLink,
+            itemLevel = GetItemLevel(equippedItemLink) or 0,
+        })
+    end
+
+    return comparisons
+end
+
+local function IsLootItemHigherLevelThanEquipped(itemLevel, comparisons)
+    if type(itemLevel) ~= "number" or itemLevel <= 0 then
+        return false
+    end
+    if type(comparisons) ~= "table" or #comparisons == 0 then
+        return false
+    end
+
+    for _, comparison in ipairs(comparisons) do
+        if itemLevel > (comparison.itemLevel or 0) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function CaptureEncounterJournalState()
+    local classID, specID
+    if type(EJ_GetLootFilter) == "function" then
+        classID, specID = SecureBlizzardCall(EJ_GetLootFilter)
+    end
+
+    return {
+        instanceID = EncounterJournal and EncounterJournal.instanceID or nil,
+        encounterID = EncounterJournal and EncounterJournal.encounterID or nil,
+        difficultyID = type(EJ_GetDifficulty) == "function" and SecureBlizzardCall(EJ_GetDifficulty) or nil,
+        classID = classID,
+        specID = specID,
+    }
+end
+
+local function RestoreEncounterJournalState(state)
+    if type(state) ~= "table" then
+        return
+    end
+
+    if type(state.instanceID) == "number" and type(EJ_SelectInstance) == "function" then
+        SecureBlizzardCall(EJ_SelectInstance, state.instanceID)
+    end
+    if type(state.difficultyID) == "number" and type(EJ_SetDifficulty) == "function" then
+        SecureBlizzardCall(EJ_SetDifficulty, state.difficultyID)
+    end
+    if type(state.encounterID) == "number" and type(EJ_SelectEncounter) == "function" then
+        SecureBlizzardCall(EJ_SelectEncounter, state.encounterID)
+    end
+    if type(EJ_SetLootFilter) == "function" and type(state.classID) == "number" then
+        SecureBlizzardCall(EJ_SetLootFilter, state.classID, state.specID or 0)
+    end
+end
+
+local function BuildDungeonLootItemsForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
+    if not ENABLE_ENCOUNTER_JOURNAL_LOOT_SCAN then
+        return {}
+    end
+
+    local classID, specID = GetCurrentPlayerClassAndSpecIDs()
+    local cacheKey = BuildDungeonLootCacheKey(dungeonName, selectedDifficulty, classID, specID, mythicPlusKeyLevel)
+    local cachedItems = dungeonLootCache[cacheKey]
+    if type(cachedItems) == "table" then
+        return cachedItems
+    end
+
+    if IsEncounterJournalVisible() then
+        return {}
+    end
+
+    if type(C_EncounterJournal) ~= "table" or type(C_EncounterJournal.GetLootInfoByIndex) ~= "function" then
+        return {}
+    end
+
+    local mapID
+    if DungeonLists and type(DungeonLists.GetJournalMapIDForDungeon) == "function" then
+        mapID = DungeonLists.GetJournalMapIDForDungeon(dungeonName, selectedDifficulty)
+    end
+    if not mapID then
+        return {}
+    end
+
+    local journalInstanceID = ResolveEncounterJournalInstanceID(mapID)
+    if not journalInstanceID then
+        return {}
+    end
+
+    if type(EJ_SelectInstance) ~= "function" then
+        return {}
+    end
+
+    local previousState = CaptureEncounterJournalState()
+    local journalDifficultyID = GetEncounterJournalDifficultyID(selectedDifficulty)
+    local items = {}
+    local canCache = true
+
+    SecureBlizzardCall(EJ_SelectInstance, journalInstanceID)
+
+    if type(EJ_SetDifficulty) == "function" and type(journalDifficultyID) == "number" then
+        SecureBlizzardCall(EJ_SetDifficulty, journalDifficultyID)
+    end
+    if type(EJ_SetLootFilter) == "function" and type(classID) == "number" then
+        SecureBlizzardCall(EJ_SetLootFilter, classID, specID or 0)
+    end
+    if selectedDifficulty == "Mythic+" and type(C_EncounterJournal) == "table" and type(C_EncounterJournal.SetPreviewMythicPlusLevel) == "function" then
+        SecureBlizzardCall(C_EncounterJournal.SetPreviewMythicPlusLevel, SanitizeMythicPlusKeyLevel(mythicPlusKeyLevel))
+    end
+
+    local lootCount = type(EJ_GetNumLoot) == "function" and (SecureBlizzardCall(EJ_GetNumLoot) or 0) or 0
+    for lootIndex = 1, lootCount do
+        local itemInfo = SecureBlizzardCall(C_EncounterJournal.GetLootInfoByIndex, lootIndex)
+        if type(itemInfo) == "table" and (itemInfo.link or itemInfo.itemID) then
+            local itemReference = itemInfo.link or itemInfo.itemID
+            local _, _, _, equipLoc = GetItemInfoInstant(itemReference)
+            local slotIDs = GetInventorySlotIDsForEquipLocation(equipLoc)
+            local itemLevel = GetItemLevel(itemReference)
+            local trackLabel, trackID, currentUpgradeLevel, maxUpgradeLevel = GetUpgradeTrackInfo(itemReference)
+            local encounterName
+
+            if type(EJ_GetEncounterInfo) == "function" and type(itemInfo.encounterID) == "number" then
+                encounterName = SecureBlizzardCall(EJ_GetEncounterInfo, itemInfo.encounterID)
+            end
+
+            if not itemInfo.link and type(itemInfo.itemID) == "number" and type(C_Item) == "table" and type(C_Item.RequestLoadItemDataByID) == "function" then
+                C_Item.RequestLoadItemDataByID(itemInfo.itemID)
+                canCache = false
+            end
+            if not itemLevel then
+                canCache = false
+            end
+
+            table.insert(items, {
+                itemID = itemInfo.itemID,
+                itemLink = itemInfo.link,
+                name = itemInfo.name,
+                icon = itemInfo.icon,
+                slotText = itemInfo.slot,
+                armorType = itemInfo.armorType,
+                encounterID = itemInfo.encounterID,
+                encounterName = encounterName,
+                equipLoc = equipLoc,
+                slotIDs = slotIDs,
+                itemLevel = itemLevel,
+                upgradeTrack = trackLabel,
+                upgradeTrackID = trackID,
+                currentUpgradeLevel = currentUpgradeLevel,
+                maxUpgradeLevel = maxUpgradeLevel,
+            })
+        end
+    end
+
+    RestoreEncounterJournalState(previousState)
+
+    if canCache then
+        dungeonLootCache[cacheKey] = items
+    end
+
+    return items
+end
+
+local function GetDungeonLootForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
+    local lootItems = BuildDungeonLootItemsForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
+    local results = {}
+
+    for _, lootItem in ipairs(lootItems) do
+        local equippedItems = BuildEquippedItemComparisons(lootItem.slotIDs)
+        local isUpgrade = IsLootItemHigherLevelThanEquipped(lootItem.itemLevel, equippedItems)
+
+        table.insert(results, {
+            itemID = lootItem.itemID,
+            itemLink = lootItem.itemLink,
+            name = lootItem.name,
+            icon = lootItem.icon,
+            slotText = lootItem.slotText,
+            armorType = lootItem.armorType,
+            encounterID = lootItem.encounterID,
+            encounterName = lootItem.encounterName,
+            equipLoc = lootItem.equipLoc,
+            slotIDs = lootItem.slotIDs,
+            itemLevel = lootItem.itemLevel,
+            upgradeTrack = lootItem.upgradeTrack,
+            upgradeTrackID = lootItem.upgradeTrackID,
+            currentUpgradeLevel = lootItem.currentUpgradeLevel,
+            maxUpgradeLevel = lootItem.maxUpgradeLevel,
+            equippedItems = equippedItems,
+            isUpgrade = isUpgrade,
+        })
+    end
+
+    return results
+end
+
+local function DoesDungeonOfferHigherItemLevelLootForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
+    for _, lootItem in ipairs(GetDungeonLootForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel)) do
+        if lootItem.isUpgrade then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function OpenEncounterJournalForDungeon(dungeonName, selectedDifficulty, mythicPlusKeyLevel)
@@ -403,16 +758,16 @@ local function OpenEncounterJournalForDungeon(dungeonName, selectedDifficulty, m
     end
 
     if selectedDifficulty == "Mythic+" then
-        C_EncounterJournal.SetPreviewMythicPlusLevel(SanitizeMythicPlusKeyLevel(mythicPlusKeyLevel))
+        securecallfunction(C_EncounterJournal.SetPreviewMythicPlusLevel, SanitizeMythicPlusKeyLevel(mythicPlusKeyLevel))
     end
 
     if type(journalDifficultyID) ~= "number" then
         journalDifficultyID = nil
     end
 
-    EncounterJournal_OpenJournal(journalDifficultyID, journalInstanceID)
+    securecallfunction(EncounterJournal_OpenJournal, journalDifficultyID, journalInstanceID)
     if type(journalDifficultyID) == "number" then
-        EJ_SetDifficulty(journalDifficultyID)
+        securecallfunction(EJ_SetDifficulty, journalDifficultyID)
     end
     return true
 end
@@ -465,6 +820,8 @@ end
 
 addon.CreateLfgGroupForDungeon = CreateLfgGroupForDungeon
 addon.OpenEncounterJournalForDungeon = OpenEncounterJournalForDungeon
+addon.GetDungeonLootForPlayer = GetDungeonLootForPlayer
+addon.DoesDungeonOfferHigherItemLevelLootForPlayer = DoesDungeonOfferHigherItemLevelLootForPlayer
 addon.IsLfgTitlePreparedForSelection = IsLfgTitlePreparedForSelection
 addon.NotifyLfgSelectionChanged = NotifyLfgSelectionChanged
 

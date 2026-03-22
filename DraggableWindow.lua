@@ -45,10 +45,24 @@ local DIFFICULTY_OPTIONS = {
 }
 
 local LOCKED_OPTION_COLOR_PREFIX = "|cff808080"
+local UPGRADE_OPTION_COLOR_PREFIX = "|cffffd200"
+local UPGRADE_OUT_OF_ROTATION_OPTION_COLOR_PREFIX = "|cff7fbe00"
 local OUT_OF_ROTATION_OPTION_COLOR_PREFIX = "|cff006400"
 local OPTION_COLOR_SUFFIX = "|r"
+-- Loot highlighting stays enabled; the scan itself avoids loading the Blizzard journal UI.
+local ENABLE_UPGRADE_HIGHLIGHT = true
 
 local frame
+local guideTooltip
+
+local function GetGuideTooltip()
+    if guideTooltip then
+        return guideTooltip
+    end
+
+    guideTooltip = CreateFrame("GameTooltip", "DungeonCallerGuideTooltip", UIParent, "GameTooltipTemplate")
+    return guideTooltip
+end
 
 local function GetSelectedDungeonName()
     local db = Helpers.GetGlobalDb()
@@ -85,6 +99,7 @@ local function DelistActiveLfgGroup()
 end
 
 local function HasPreparedLfgTitle()
+    local selectedDungeon = GetSelectedDungeonName()
     if selectedDungeon == "" then
         return false
     end
@@ -201,12 +216,43 @@ local function CollectMythicPlusDungeonNameLookup()
     return lookup, count
 end
 
+local function CollectUpgradeableDungeonNameLookup(group)
+    if not ENABLE_UPGRADE_HIGHLIGHT then
+        return {}
+    end
+    if type(addon.DoesDungeonOfferHigherItemLevelLootForPlayer) ~= "function" then
+        return {}
+    end
+
+    local lookup = {}
+
+    local currentDb = Helpers.GetGlobalDb()
+    local selectedDifficulty = currentDb.selectedDifficulty
+    local mythicPlusKeyLevel = currentDb.mythicPlusKeyLevel
+
+    for _, dungeonName in ipairs(group.options or {}) do
+        local nameKey = BuildDungeonNameKey(dungeonName)
+        if nameKey ~= "" then
+            if addon.DoesDungeonOfferHigherItemLevelLootForPlayer(dungeonName, selectedDifficulty, mythicPlusKeyLevel) then
+                lookup[nameKey] = true
+            end
+        end
+    end
+
+    return lookup
+end
+
 local function BuildOptionDisplayContext(group)
     local context = {
         lockedLookup = nil,
+        upgradeLookup = nil,
         mythicPlusLookup = nil,
         highlightOutOfRotation = false,
     }
+
+    if ENABLE_UPGRADE_HIGHLIGHT and group.useUpgradeHighlight and group:IsShown() then
+        context.upgradeLookup = CollectUpgradeableDungeonNameLookup(group)
+    end
 
     if group.useLockoutHighlight then
         context.lockedLookup = CollectLockedDungeonNameLookup()
@@ -227,14 +273,22 @@ end
 local function GetOptionDisplayText(option, context)
     local optionName = tostring(option or "")
     local optionKey = BuildDungeonNameKey(optionName)
+    local shouldHighlightOutOfRotation = context and context.highlightOutOfRotation
+    local mythicPlusLookup = context and context.mythicPlusLookup
+
+    local upgradeLookup = context and context.upgradeLookup
+    if optionKey ~= "" and upgradeLookup and upgradeLookup[optionKey] and shouldHighlightOutOfRotation and mythicPlusLookup and not mythicPlusLookup[optionKey] then
+        return UPGRADE_OUT_OF_ROTATION_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
+    end
+    if optionKey ~= "" and upgradeLookup and upgradeLookup[optionKey] then
+        return UPGRADE_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
+    end
 
     local lockedLookup = context and context.lockedLookup
     if optionKey ~= "" and lockedLookup and lockedLookup[optionKey] then
         return LOCKED_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
     end
 
-    local shouldHighlightOutOfRotation = context and context.highlightOutOfRotation
-    local mythicPlusLookup = context and context.mythicPlusLookup
     if optionKey ~= "" and shouldHighlightOutOfRotation and mythicPlusLookup and not mythicPlusLookup[optionKey] then
         return OUT_OF_ROTATION_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
     end
@@ -337,6 +391,7 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
     group.options = {}
     group.onSelected = onSelected
     group.useLockoutHighlight = useLockoutHighlight == true
+    group.useUpgradeHighlight = false
     group.useMythicOutOfRotationHighlight = false
     group.onGuideOpen = onGuideOpen
 
@@ -396,13 +451,16 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
             onGuideOpen()
         end)
         guideButton:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Open Adventure Guide")
-            GameTooltip:AddLine("Opens the selected dungeon in the Encounter Journal.", 1, 1, 1, true)
-            GameTooltip:Show()
+            local tooltip = GetGuideTooltip()
+            tooltip:SetOwner(self, "ANCHOR_RIGHT")
+            tooltip:SetText("Open Adventure Guide")
+            tooltip:AddLine("Opens the selected dungeon in the Encounter Journal.", 1, 1, 1, true)
+            tooltip:Show()
         end)
         guideButton:SetScript("OnLeave", function()
-            GameTooltip:Hide()
+            if guideTooltip then
+                guideTooltip:Hide()
+            end
         end)
         guideButton:SetEnabled(false)
         guideButton:UpdateVisualState()
@@ -425,13 +483,14 @@ local function CreateDropdownGroup(parent, headingText, dropdownName, dbKey, opt
         end
 
         local optionDisplayContext = BuildOptionDisplayContext(group)
+        local currentSelectedValue = Helpers.GetGlobalDb()[group.dbKey]
 
         for _, option in ipairs(group.options) do
             local info = UIDropDownMenu_CreateInfo()
             local displayText = GetOptionDisplayText(option, optionDisplayContext)
             info.text = displayText
             info.value = option
-            info.checked = selectedValue == option
+            info.checked = currentSelectedValue == option
             info.minWidth = group.menuWidth
             info.func = function()
                 SetDbValue(group.dbKey, option)
@@ -639,6 +698,7 @@ local function CreateContentControls(window)
         true,
         OpenSelectedDungeonInAdventureGuide
     )
+    dungeonGroup.useUpgradeHighlight = ENABLE_UPGRADE_HIGHLIGHT
     dungeonGroup.useMythicOutOfRotationHighlight = true
     local mplusGroup = CreateDropdownGroup(
         section,
@@ -656,6 +716,7 @@ local function CreateContentControls(window)
         true,
         OpenSelectedDungeonInAdventureGuide
     )
+    mplusGroup.useUpgradeHighlight = ENABLE_UPGRADE_HIGHLIGHT
     CreateMythicPlusKeyWidgets(window, difficultyGroup)
 
     window.difficultyGroup = difficultyGroup
@@ -702,8 +763,19 @@ end
 local listingStateFrame = CreateFrame("Frame")
 listingStateFrame:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
 listingStateFrame:RegisterEvent("LFG_LIST_ENTRY_CREATION_FAILED")
-listingStateFrame:SetScript("OnEvent", function()
+if ENABLE_UPGRADE_HIGHLIGHT then
+    listingStateFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    listingStateFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+end
+listingStateFrame:SetScript("OnEvent", function(_, event)
     local window = DraggableWindow.Initialize()
+    if event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if window:IsShown() then
+            RefreshDropdownGroups(window)
+        end
+        return
+    end
+
     RefreshListButtonText(window)
 end)
 
