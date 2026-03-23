@@ -276,17 +276,18 @@ local function GetOptionDisplayText(option, context)
     local shouldHighlightOutOfRotation = context and context.highlightOutOfRotation
     local mythicPlusLookup = context and context.mythicPlusLookup
 
+    local lockedLookup = context and context.lockedLookup
+    -- Lockout styling must win over other highlights so unavailable dungeons stay gray.
+    if optionKey ~= "" and lockedLookup and lockedLookup[optionKey] then
+        return LOCKED_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
+    end
+
     local upgradeLookup = context and context.upgradeLookup
     if optionKey ~= "" and upgradeLookup and upgradeLookup[optionKey] and shouldHighlightOutOfRotation and mythicPlusLookup and not mythicPlusLookup[optionKey] then
         return UPGRADE_OUT_OF_ROTATION_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
     end
     if optionKey ~= "" and upgradeLookup and upgradeLookup[optionKey] then
         return UPGRADE_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
-    end
-
-    local lockedLookup = context and context.lockedLookup
-    if optionKey ~= "" and lockedLookup and lockedLookup[optionKey] then
-        return LOCKED_OPTION_COLOR_PREFIX .. optionName .. OPTION_COLOR_SUFFIX
     end
 
     if optionKey ~= "" and shouldHighlightOutOfRotation and mythicPlusLookup and not mythicPlusLookup[optionKey] then
