@@ -311,8 +311,10 @@ end
 
 local latestPreparedLfgTitleKey = ""
 local dungeonLootCache = {}
--- Background loot scans use API calls directly and avoid loading the Blizzard Encounter Journal UI.
+-- Background loot scans prefer the C_EncounterJournal loot API and only fall back to legacy EJ loot APIs if needed.
 local ENABLE_ENCOUNTER_JOURNAL_LOOT_SCAN = true
+local DEBUG_UPGRADE_HIGHLIGHT = true
+local debugUpgradeHighlightSeenKeys = {}
 
 local function SecureBlizzardCall(func, ...)
     if type(func) ~= "function" then
@@ -320,6 +322,68 @@ local function SecureBlizzardCall(func, ...)
     end
 
     return securecallfunction(func, ...)
+end
+
+local function DebugUpgradeHighlightLog(message, ...)
+    if not DEBUG_UPGRADE_HIGHLIGHT then
+        return
+    end
+
+    local prefix = "Dungeon Caller [UpgradeDebug]: "
+    if select("#", ...) > 0 then
+        local ok, formatted = pcall(string.format, tostring(message), ...)
+        if ok then
+            print(prefix .. formatted)
+            return
+        end
+    end
+
+    print(prefix .. tostring(message))
+end
+
+local function DebugUpgradeHighlightLogOnce(key, message, ...)
+    if debugUpgradeHighlightSeenKeys[key] then
+        return
+    end
+
+    debugUpgradeHighlightSeenKeys[key] = true
+    DebugUpgradeHighlightLog(message, ...)
+end
+
+local function IsSecretValueForDebug(value)
+    if type(issecretvalue) ~= "function" then
+        return false
+    end
+
+    local ok, result = pcall(issecretvalue, value)
+    return ok and result == true
+end
+
+local function IsSecretTableForDebug(value)
+    if type(issecrettable) ~= "function" or type(value) ~= "table" then
+        return false
+    end
+
+    local ok, result = pcall(issecrettable, value)
+    return ok and result == true
+end
+
+local function HasAnySecretValuesForDebug(...)
+    if type(hasanysecretvalues) ~= "function" then
+        return false
+    end
+
+    local ok, result = pcall(hasanysecretvalues, ...)
+    return ok and result == true
+end
+
+local function CanAccessTableForDebug(value)
+    if type(canaccesstable) ~= "function" or type(value) ~= "table" then
+        return true
+    end
+
+    local ok, result = pcall(canaccesstable, value)
+    return ok and result == true
 end
 
 local function IsEncounterJournalVisible()
@@ -601,8 +665,22 @@ local function BuildDungeonLootItemsForPlayer(dungeonName, selectedDifficulty, m
         return {}
     end
 
-    if type(C_EncounterJournal) ~= "table" or type(C_EncounterJournal.GetLootInfoByIndex) ~= "function" then
+    local hasLegacyLootApi = type(EJ_GetLootInfoByIndex) == "function"
+    local hasCLootApi = type(C_EncounterJournal) == "table" and type(C_EncounterJournal.GetLootInfoByIndex) == "function"
+    if not hasLegacyLootApi and not hasCLootApi then
+        DebugUpgradeHighlightLogOnce(
+            "loot_api_missing",
+            "No Encounter Journal loot API is available. EJ=%s C_EncounterJournal=%s.",
+            tostring(hasLegacyLootApi),
+            tostring(hasCLootApi)
+        )
         return {}
+    end
+    if not hasCLootApi and hasLegacyLootApi then
+        DebugUpgradeHighlightLogOnce(
+            "loot_api_fallback_legacy",
+            "C_EncounterJournal.GetLootInfoByIndex is unavailable; using legacy EJ_GetLootInfoByIndex for loot scans."
+        )
     end
 
     local mapID
@@ -641,21 +719,69 @@ local function BuildDungeonLootItemsForPlayer(dungeonName, selectedDifficulty, m
 
     local lootCount = type(EJ_GetNumLoot) == "function" and (SecureBlizzardCall(EJ_GetNumLoot) or 0) or 0
     for lootIndex = 1, lootCount do
-        local itemInfo = SecureBlizzardCall(C_EncounterJournal.GetLootInfoByIndex, lootIndex)
-        if type(itemInfo) == "table" and (itemInfo.link or itemInfo.itemID) then
-            local itemReference = itemInfo.link or itemInfo.itemID
+        local itemID, encounterID, itemName, itemIcon, slotText, armorType, itemLink
+        local lootApiUsed = "C_EncounterJournal.GetLootInfoByIndex"
+
+        if hasCLootApi then
+            lootApiUsed = "C_EncounterJournal.GetLootInfoByIndex"
+            local itemInfo = SecureBlizzardCall(C_EncounterJournal.GetLootInfoByIndex, lootIndex)
+            if type(itemInfo) == "table" then
+                local tableIsSecret = IsSecretTableForDebug(itemInfo)
+                local fieldHasSecrets = HasAnySecretValuesForDebug(itemInfo.itemID, itemInfo.encounterID, itemInfo.name, itemInfo.icon, itemInfo.slot, itemInfo.armorType, itemInfo.link)
+                local canAccessTable = CanAccessTableForDebug(itemInfo)
+
+                if tableIsSecret or fieldHasSecrets or not canAccessTable then
+                    local secretKey = table.concat({
+                        "secret_loot",
+                        tostring(cacheKey),
+                        tostring(lootIndex),
+                    }, ":")
+                    DebugUpgradeHighlightLogOnce(
+                        secretKey,
+                        "Suspicious Encounter Journal loot data for %s via %s. lootIndex=%s tableSecret=%s fieldSecrets=%s canAccessTable=%s itemID=%s encounterID=%s name=%s icon=%s slot=%s armorType=%s link=%s.",
+                        tostring(dungeonName),
+                        lootApiUsed,
+                        tostring(lootIndex),
+                        tostring(tableIsSecret),
+                        tostring(fieldHasSecrets),
+                        tostring(canAccessTable),
+                        tostring(IsSecretValueForDebug(itemInfo.itemID)),
+                        tostring(IsSecretValueForDebug(itemInfo.encounterID)),
+                        tostring(IsSecretValueForDebug(itemInfo.name)),
+                        tostring(IsSecretValueForDebug(itemInfo.icon)),
+                        tostring(IsSecretValueForDebug(itemInfo.slot)),
+                        tostring(IsSecretValueForDebug(itemInfo.armorType)),
+                        tostring(IsSecretValueForDebug(itemInfo.link))
+                    )
+                end
+
+                itemID = itemInfo.itemID
+                encounterID = itemInfo.encounterID
+                itemName = itemInfo.name
+                itemIcon = itemInfo.icon
+                slotText = itemInfo.slot
+                armorType = itemInfo.armorType
+                itemLink = itemInfo.link
+            end
+        else
+            lootApiUsed = "EJ_GetLootInfoByIndex"
+            itemID, encounterID, itemName, itemIcon, slotText, armorType, itemLink = SecureBlizzardCall(EJ_GetLootInfoByIndex, lootIndex)
+        end
+
+        if itemLink or itemID then
+            local itemReference = itemLink or itemID
             local _, _, _, equipLoc = GetItemInfoInstant(itemReference)
             local slotIDs = GetInventorySlotIDsForEquipLocation(equipLoc)
             local itemLevel = GetItemLevel(itemReference)
             local trackLabel, trackID, currentUpgradeLevel, maxUpgradeLevel = GetUpgradeTrackInfo(itemReference)
             local encounterName
 
-            if type(EJ_GetEncounterInfo) == "function" and type(itemInfo.encounterID) == "number" then
-                encounterName = SecureBlizzardCall(EJ_GetEncounterInfo, itemInfo.encounterID)
+            if type(EJ_GetEncounterInfo) == "function" and type(encounterID) == "number" then
+                encounterName = SecureBlizzardCall(EJ_GetEncounterInfo, encounterID)
             end
 
-            if not itemInfo.link and type(itemInfo.itemID) == "number" and type(C_Item) == "table" and type(C_Item.RequestLoadItemDataByID) == "function" then
-                C_Item.RequestLoadItemDataByID(itemInfo.itemID)
+            if not itemLink and type(itemID) == "number" and type(C_Item) == "table" and type(C_Item.RequestLoadItemDataByID) == "function" then
+                C_Item.RequestLoadItemDataByID(itemID)
                 canCache = false
             end
             if not itemLevel then
@@ -663,13 +789,13 @@ local function BuildDungeonLootItemsForPlayer(dungeonName, selectedDifficulty, m
             end
 
             table.insert(items, {
-                itemID = itemInfo.itemID,
-                itemLink = itemInfo.link,
-                name = itemInfo.name,
-                icon = itemInfo.icon,
-                slotText = itemInfo.slot,
-                armorType = itemInfo.armorType,
-                encounterID = itemInfo.encounterID,
+                itemID = itemID,
+                itemLink = itemLink,
+                name = itemName,
+                icon = itemIcon,
+                slotText = slotText,
+                armorType = armorType,
+                encounterID = encounterID,
                 encounterName = encounterName,
                 equipLoc = equipLoc,
                 slotIDs = slotIDs,
