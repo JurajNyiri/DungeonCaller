@@ -313,6 +313,7 @@ local latestPreparedLfgTitleKey = ""
 local dungeonLootCache = {}
 -- Background loot scans use API calls directly and avoid loading the Blizzard Encounter Journal UI.
 local ENABLE_ENCOUNTER_JOURNAL_LOOT_SCAN = true
+local journalTooltipMoneyWorkaroundRegistered = false
 
 local function SecureBlizzardCall(func, ...)
     if type(func) ~= "function" then
@@ -320,6 +321,94 @@ local function SecureBlizzardCall(func, ...)
     end
 
     return securecallfunction(func, ...)
+end
+
+local function FrameNameContainsEncounterJournal(frame)
+    if not frame or type(frame.GetName) ~= "function" then
+        return false
+    end
+
+    local frameName = frame:GetName()
+    return type(frameName) == "string" and string.find(frameName, "EncounterJournal", 1, true) ~= nil
+end
+
+local function TooltipBelongsToEncounterJournal(tooltip)
+    local visited = {}
+
+    local function ScanFrameChain(frame)
+        while frame and not visited[frame] do
+            visited[frame] = true
+
+            if FrameNameContainsEncounterJournal(frame) then
+                return true
+            end
+
+            if type(frame.GetParent) ~= "function" then
+                break
+            end
+            frame = frame:GetParent()
+        end
+
+        return false
+    end
+
+    if ScanFrameChain(tooltip) then
+        return true
+    end
+
+    local owner = tooltip and type(tooltip.GetOwner) == "function" and tooltip:GetOwner() or nil
+    while owner and not visited[owner] do
+        if ScanFrameChain(owner) then
+            return true
+        end
+
+        if type(owner.GetOwner) ~= "function" then
+            break
+        end
+        owner = owner:GetOwner()
+    end
+
+    return false
+end
+
+local function SuppressEncounterJournalSellPriceLine(tooltip, data)
+    if not TooltipBelongsToEncounterJournal(tooltip) then
+        return
+    end
+    if type(data) ~= "table" or type(data.lines) ~= "table" then
+        return
+    end
+
+    local sellPriceLineType = type(Enum) == "table"
+        and type(Enum.TooltipDataLineType) == "table"
+        and Enum.TooltipDataLineType.SellPrice
+        or nil
+    if sellPriceLineType == nil then
+        return
+    end
+
+    -- Narrow workaround for Blizzard's 12.x secret-money tooltip issue in the Encounter Journal.
+    for index = #data.lines, 1, -1 do
+        local lineData = data.lines[index]
+        if type(lineData) == "table" and lineData.type == sellPriceLineType then
+            table.remove(data.lines, index)
+        end
+    end
+end
+
+local function RegisterJournalTooltipMoneyWorkaround()
+    if journalTooltipMoneyWorkaroundRegistered then
+        return
+    end
+    if type(TooltipDataProcessor) ~= "table" or type(TooltipDataProcessor.AddTooltipPreCall) ~= "function" then
+        return
+    end
+    if type(Enum) ~= "table" or type(Enum.TooltipDataType) ~= "table" or Enum.TooltipDataType.Item == nil then
+        return
+    end
+
+    TooltipDataProcessor.AddTooltipPreCall(Enum.TooltipDataType.Item, SuppressEncounterJournalSellPriceLine)
+    journalTooltipMoneyWorkaroundRegistered = true
 end
 
 local function IsEncounterJournalVisible()
@@ -917,5 +1006,6 @@ bootstrap:SetScript("OnEvent", function(_, event, loadedAddon)
         UI.SetDb(db)
         UI.Initialize(db)
         MinimapButton.Initialize()
+        RegisterJournalTooltipMoneyWorkaround()
     end
 end)
